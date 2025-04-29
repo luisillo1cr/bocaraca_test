@@ -23,10 +23,10 @@ registerForm.addEventListener('submit', async function(event) {
     }
 
     // Crear usuario en Firebase Auth
-    await createUserWithEmailAndPassword(auth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
     // Obtener el usuario autenticado actual
-    const user = auth.currentUser;
+    const user = userCredential.user;
 
     if (!user) {
       showAlert("Error: no se pudo obtener el usuario autenticado.", "error");
@@ -53,7 +53,7 @@ registerForm.addEventListener('submit', async function(event) {
     }, 1500);
 
   } catch (error) {
-    console.error('Error en el registro:', error.message);
+    console.error('Error en el registro:', error);
     showAlert('Error al registrar: ' + error.message, 'error');
   }
 });
