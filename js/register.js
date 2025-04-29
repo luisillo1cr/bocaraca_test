@@ -10,7 +10,7 @@ registerForm.addEventListener('submit', async function(event) {
 
   const nombre = document.getElementById('full_name').value.trim();
   const cedula = document.getElementById('cedula').value.trim();
-  const phone = document.getElementById('phone').value.trim(); // aún no lo guardas en Firestore
+  const phone = document.getElementById('phone').value.trim();
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
 
@@ -23,10 +23,19 @@ registerForm.addEventListener('submit', async function(event) {
     }
 
     // Crear usuario en Firebase Auth
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    await createUserWithEmailAndPassword(auth, email, password);
 
-    // Guardar en Firestore
+    // Obtener el usuario autenticado actual
+    const user = auth.currentUser;
+
+    if (!user) {
+      showAlert("Error: no se pudo obtener el usuario autenticado.", "error");
+      return;
+    }
+
+    console.log("UID autenticado:", user.uid); // Para debug visual
+
+    // Guardar en Firestore con la estructura correcta
     await setDoc(doc(db, 'users', user.uid), {
       nombre: nombre,
       cedula: cedula,
@@ -38,6 +47,7 @@ registerForm.addEventListener('submit', async function(event) {
     });
 
     showAlert("Usuario registrado exitosamente.", 'success');
+
     setTimeout(() => {
       window.location.href = "./index.html";
     }, 1500);
