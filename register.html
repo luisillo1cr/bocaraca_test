@@ -44,15 +44,13 @@
   const auth = getAuth(app);
 
   onAuthStateChanged(auth, (user) => {
-    // Verifica si el usuario está autenticado
     if (user) {
-      // Si el usuario está autenticado y está en la página de registro, redirige al dashboard o página principal
-      if (window.location.pathname !== './register.html') {
-        window.location.href = './index.html'; // o la página correspondiente
-      }
+      // Si ya está logueado, redirige al panel principal (puedes cambiar el destino)
+      window.location.href = './index.html';
     }
   });
 </script>
+
 <footer>
   <p>© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
 </footer>
