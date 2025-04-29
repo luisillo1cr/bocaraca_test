@@ -44,11 +44,14 @@
   const auth = getAuth(app);
 
   onAuthStateChanged(auth, (user) => {
-    const currentPath = window.location.pathname;
-
-    // Redirige si el usuario está logueado Y no está ya en el dashboard
-    if (user && !currentPath.includes('admin') && !currentPath.includes('dashboard')) {
-      window.location.href = './index.html';
+    if (user) {
+      // Redirige a dashboard según el tipo de usuario
+      const adminEmails = ["luis.davidsolorzano@outlook.es", "ivan.cicc@hotmail.com"];
+      const destination = adminEmails.includes(user.email) 
+        ? './admin-dashboard.html' 
+        : './client-dashboard.html';
+  
+      window.location.href = destination;
     }
   });
 </script>
