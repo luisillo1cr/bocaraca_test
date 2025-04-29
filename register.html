@@ -44,8 +44,10 @@
   const auth = getAuth(app);
 
   onAuthStateChanged(auth, (user) => {
-    if (user) {
-      // Si ya está logueado, redirige al panel principal (puedes cambiar el destino)
+    const currentPath = window.location.pathname;
+
+    // Redirige si el usuario está logueado Y no está ya en el dashboard
+    if (user && !currentPath.includes('admin') && !currentPath.includes('dashboard')) {
       window.location.href = './index.html';
     }
   });
