@@ -1,31 +1,45 @@
-// register.js
-import { auth } from './firebase-config.js';
+import { auth, db } from './firebase-config.js';
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { doc, setDoc, getDocs, query, collection, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { showAlert } from './showAlert.js';
 
-// Función de alertas visuales
-import { showAlert } from './showAlert.js'; // (asegúrate de tener este archivo o este código en tu proyecto)
-
-// Obtener el formulario
 const registerForm = document.getElementById('registerForm');
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
 
 registerForm.addEventListener('submit', async function(event) {
   event.preventDefault();
-  
-  const email = emailInput.value;
-  const password = passwordInput.value;
+
+  const nombre = document.getElementById('full_name').value.trim();
+  const cedula = document.getElementById('cedula').value.trim();
+  const phone = document.getElementById('phone').value.trim(); // aún no lo guardas en Firestore
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
 
   try {
-    // Crear usuario
+    // Verificar si la cédula ya está registrada
+    const cedulaQuery = await getDocs(query(collection(db, 'users'), where('cedula', '==', cedula)));
+    if (!cedulaQuery.empty) {
+      showAlert('La cédula ya está registrada.', 'error');
+      return;
+    }
+
+    // Crear usuario en Firebase Auth
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    showAlert("Usuario registrado exitosamente: " + email, 'success');
+    // Guardar en Firestore
+    await setDoc(doc(db, 'users', user.uid), {
+      nombre: nombre,
+      cedula: cedula,
+      celular: phone,
+      email: email,
+      autorizado: false,
+      admin: false,
+      uid: user.uid
+    });
 
-    // Redirigir después de un pequeño delay para ver la alerta
+    showAlert("Usuario registrado exitosamente.", 'success');
     setTimeout(() => {
-      window.location.href = "./index.html"; 
+      window.location.href = "./index.html";
     }, 1500);
 
   } catch (error) {
