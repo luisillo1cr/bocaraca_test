@@ -47,6 +47,29 @@ if (loginForm) {
     });
 }
 
+// REGISTRO
+const registerForm = document.getElementById("registerForm");
+if (registerForm) {
+    registerForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const fullName = document.getElementById("fullName").value;
+        const phone = document.getElementById("phone").value;
+        const cedula = document.getElementById("cedula").value;
+
+        // Simulación de registro exitoso
+        if (email && password && fullName && phone && cedula) {
+            showAlert('Registro exitoso!', 'success');
+            setTimeout(() => {
+                window.location.href = './index.html';
+            }, 1000);
+        } else {
+            showAlert('Por favor completa todos los campos.', 'error');
+        }
+    });
+}
+
 // RESERVAR CLASE
 const reserveButton = document.getElementById("reserve-button");
 if (reserveButton) {
