@@ -3,10 +3,10 @@ import { auth } from './firebase-config.js';
 
 // Firebase Auth y Firestore SDKs
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { guardarUsuarioPorCedula } from './firestore-utils.js'; // <-- NUEVO IMPORT
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Funciones reutilizables
-import { guardarUsuarioPorCedula } from './firestore-utils.js'; // <-- NUEVO IMPORT
 import { showAlert } from './showAlert.js';
 
 // Obtener el formulario
