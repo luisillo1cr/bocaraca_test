@@ -17,9 +17,11 @@ form.addEventListener('submit', async (e) => {
     // Crear usuario en Firebase Authentication
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const uid = userCredential.user.uid;
+    console.log('UID del nuevo usuario:', uid);  // Aquí estamos mostrando el UID en la consola
 
     // Guardar en Firebase Realtime Database
     const userRef = ref(db, 'users/' + uid);  // 'users' es la colección en Realtime Database
+    console.log('Referencia de usuario en la base de datos:', userRef);
     await set(userRef, {
       cedula,
       nombre,
@@ -27,6 +29,10 @@ form.addEventListener('submit', async (e) => {
       uid,
       autorizado: false,
       esAdmin: false
+    }).then(() => {
+      console.log('Datos guardados correctamente en Realtime Database');
+    }).catch((error) => {
+      console.error('Error al guardar en la base de datos:', error);
     });
 
     mostrarToast('Registro exitoso ✅', 'success');
