@@ -10,6 +10,22 @@ import {
 import { showAlert } from './showAlert.js';
 
 document.addEventListener('DOMContentLoaded', function () {
+    // Lista de UIDs de administradores
+    const ADMIN_UIDS = [
+        "TWAkND9zF0UKdMzswAPkgas9zfL2", // ivan.cicc@hotmail.com
+        "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"  // luis.davidsolorzano@outlook.es
+    ];
+
+    const auth = firebase.auth();
+    const currentUser = auth.currentUser;
+
+    // Verificar si el usuario está en la whitelist de administradores
+    if (!currentUser || !ADMIN_UIDS.includes(currentUser.uid)) {
+        // Si no es admin, redirigir a la página principal
+        window.location.href = './index.html';
+        return;
+    }
+
     // Inicializar calendario
     const calendarEl = document.getElementById('calendar');
 
