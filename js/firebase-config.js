@@ -1,6 +1,5 @@
 // Importar las bibliotecas de Firebase necesarias
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";  // Importar Realtime Database
@@ -19,7 +18,6 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 
 // Inicializar Auth, Firestore y Realtime Database
 const auth = getAuth(app);
