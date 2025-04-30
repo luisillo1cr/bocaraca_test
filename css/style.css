@@ -192,18 +192,6 @@ button.delete-btn:hover {
   gap: 20px; /* espacio entre calendario y botón */
 }
 
-#logoutBtn {
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.3s;
-  margin: 20px auto 0 auto;
-}
-
 #logoutBtn:hover {
   background-color: #0056b3;
 }
