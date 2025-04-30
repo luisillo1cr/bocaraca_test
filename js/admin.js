@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function () {
             querySnapshot.forEach(doc => {
                 const data = doc.data();
                 const date = data.date;
-                const name = data.fullName || data.name || "Desconocido";
+                const name = data.nombre || "Desconocido";
 
                 if (date) {
                     if (!reservationsByDate[date]) {

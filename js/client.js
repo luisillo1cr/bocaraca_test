@@ -101,11 +101,32 @@ async function checkExistingReservation(date, time) {
 }
 
 async function addReservation(date, time) {
-    await addDoc(collection(db, 'reservations'), {
-        date: date,
-        time: time,
-        user: auth.currentUser.email,
-    });
+    try {
+        // Buscar el documento del usuario actual en la colección 'users' usando su correo
+        const q = query(collection(db, 'users'), where('correo', '==', auth.currentUser.email));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            showAlert('No se encontró el perfil del usuario en la base de datos.', 'error');
+            return;
+        }
+
+        const userData = querySnapshot.docs[0].data();
+        const nombreCompleto = userData.nombre;
+
+        // Guardar la reserva con nombre y correo
+        await addDoc(collection(db, 'reservations'), {
+            date: date,
+            time: time,
+            user: auth.currentUser.email,
+            nombre: nombreCompleto
+        });
+
+    } catch (error) {
+        console.error("Error al agregar la reserva:", error);
+        showAlert("Error al guardar la reserva.", 'error');
+        throw error;
+    }
 }
 
 async function deleteReservation(reservationId) {
