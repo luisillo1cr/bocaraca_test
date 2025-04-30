@@ -2,11 +2,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";  // Importar Realtime Database
 
 // Tu configuración de Firebase (reemplaza con la configuración de tu proyecto)
 const firebaseConfig = {
     apiKey: "AIzaSyD6CUddDq2jRZ3XzNT5FfXAc-ALStQ4hdo",
     authDomain: "bocaracadb.firebaseapp.com",
+    databaseURL: "https://bocaracadb-default-rtdb.firebaseio.com/",  // Asegúrate de usar la URL de tu Realtime Database
     projectId: "bocaracadb",
     storageBucket: "bocaracadb.appspot.com",
     messagingSenderId: "420681635696",
@@ -17,9 +19,10 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializar Auth y Firestore
+// Inicializar Auth, Firestore y Realtime Database
 const auth = getAuth(app);
 const db = getFirestore(app);
+const database = getDatabase(app);  // Aquí inicializas Realtime Database
 
 // Exportar para su uso en otros archivos
-export { app, auth, db };  // Ahora exportamos 'app' también
+export { app, auth, db, database };  // Exporta 'database' también
