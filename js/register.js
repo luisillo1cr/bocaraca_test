@@ -65,6 +65,7 @@ registerForm.addEventListener("submit", async (e) => {
     }, 2000);
 
   } catch (error) {
+    console.log("🔥 ERROR DETECTADO:", error); // <-- Añade esta línea
     const mensaje = mapAuthError(error.code);
     showToast(mensaje, "error");
   }
