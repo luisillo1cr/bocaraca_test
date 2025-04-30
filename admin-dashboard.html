@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>Panel de Admin - Reservas</title>
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.js"></script>
@@ -24,17 +23,22 @@
       <div class="card">
         <div id='calendar'></div>
       </div>
-
       <button id="logoutBtn">Cerrar sesión</button>
+    </div>
+
+    <!-- Lista de usuarios -->
+    <div class="user-list-wrapper">
+      <div class="card">
+        <h2>Usuarios Registrados</h2>
+        <ul id="userList" class="user-list"></ul>
+      </div>
     </div>
   </main>
 
   <div id="toast-container"></div>
 
-  <!-- Tu propio script -->
   <script type="module" src="./js/admin.js"></script>
 
-  <!-- Código para validar sesión -->
   <script type="module">
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
     import { app } from './js/firebase-config.js';
@@ -49,6 +53,7 @@
       }
     });
   </script>
+
   <footer>
     <p>© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
   </footer>

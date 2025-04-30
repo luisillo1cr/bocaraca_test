@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { collection, addDoc, getDocs, query, where, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Asegúrate de importar getDocs
+import { collection, addDoc, getDocs, query, where, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
 let calendar;
@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', function () {
         events: function (info, successCallback, failureCallback) {
             const q = query(collection(db, 'reservations'), where('date', '>=', info.startStr), where('date', '<=', info.endStr));
             
-            // Usamos onSnapshot() para recibir actualizaciones en tiempo real
             onSnapshot(q, (querySnapshot) => {
                 const events = querySnapshot.docs
                     .filter(doc => {
