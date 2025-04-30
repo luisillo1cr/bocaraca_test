@@ -34,7 +34,7 @@ registerForm.addEventListener("submit", async (e) => {
 
   try {
     // Validar si ya existe una cédula registrada
-    const q = query(collection(db, "usuarios"), where("cedula", "==", cedula));
+    const q = query(collection(db, "users"), where("cedula", "==", cedula));
     const querySnapshot = await getDocs(q);
 
     if (!querySnapshot.empty) {
@@ -47,7 +47,7 @@ registerForm.addEventListener("submit", async (e) => {
     const user = userCredential.user;
 
     // Guardar en Firestore
-    await addDoc(collection(db, "usuarios"), {
+    await addDoc(collection(db, "users"), {
       uid: user.uid,
       nombre: fullName,
       cedula,
