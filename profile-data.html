@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Datos Personales - Bocaraca MMA</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<main class="container">
+  <h1>Ingresa tus Datos Personales</h1>
+  
+  <form id="profileForm" class="card" autocomplete="off">
+    <label for="full_name">Nombre Completo</label>
+    <input type="text" id="full_name" required autocomplete="off"/>
+    
+    <label for="cedula">Cédula</label>
+    <input type="text" id="cedula" required autocomplete="off"/>
+    
+    <label for="phone">Celular</label>
+    <input type="tel" id="phone" required autocomplete="off"/>
+    
+    <button type="submit">Guardar Datos</button>
+  </form>
+</main>
+
+<!-- Scripts -->
+<script type="module" src="./js/profile-data.js"></script>
+
+</body>
+</html>
