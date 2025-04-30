@@ -16,29 +16,32 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         events: function (info, successCallback, failureCallback) {
             const q = query(collection(db, 'reservations'));
-
+    
             onSnapshot(q, (querySnapshot) => {
-                // Contar reservas por fecha
-                const dateCounts = {};
-
+                const reservationsByDate = {};
+    
                 querySnapshot.forEach(doc => {
                     const data = doc.data();
                     const date = data.date;
+                    const name = data.fullName || data.name || "Desconocido";
+    
                     if (date) {
-                        if (!dateCounts[date]) {
-                            dateCounts[date] = 0;
+                        if (!reservationsByDate[date]) {
+                            reservationsByDate[date] = [];
                         }
-                        dateCounts[date]++;
+                        reservationsByDate[date].push(name);
                     }
                 });
-
-                // Convertir a eventos del calendario
-                const events = Object.keys(dateCounts).map(date => ({
-                title: `${dateCounts[date]}`,
-                start: date,
-                allDay: true
+    
+                const events = Object.keys(reservationsByDate).map(date => ({
+                    title: `${reservationsByDate[date].length}`,
+                    start: date,
+                    allDay: true,
+                    extendedProps: {
+                        names: reservationsByDate[date]
+                    }
                 }));
-
+    
                 successCallback(events);
             }, (error) => {
                 console.error('Error al obtener las reservas:', error);
@@ -46,18 +49,34 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         },
         eventClick: function(info) {
-            // Evitar cualquier acción al hacer clic en eventos
             info.jsEvent.preventDefault();
         },
-
-                // Bloquear días no reservables visualmente
-                dayCellClassNames: function(arg) {
-                  const day = arg.date.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
-                  if (day !== 5 && day !== 6) { // si NO es viernes (5) ni sábado (6)
-                      return ['disabled-day']; // le aplicamos la clase 'disabled-day' a días no reservables
-                  }
-              }
-          });
+        eventMouseEnter: function(info) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'custom-tooltip';
+            tooltip.innerHTML = `<strong>Usuarios:</strong><br>${info.event.extendedProps.names.join('<br>')}`;
+            document.body.appendChild(tooltip);
+    
+            function positionTooltip(e) {
+                tooltip.style.left = `${e.pageX + 10}px`;
+                tooltip.style.top = `${e.pageY + 10}px`;
+            }
+    
+            positionTooltip(info.jsEvent);
+    
+            info.el.addEventListener('mousemove', positionTooltip);
+    
+            info.el.addEventListener('mouseleave', function() {
+                tooltip.remove();
+            });
+        },
+        dayCellClassNames: function(arg) {
+            const day = arg.date.getDay();
+            if (day !== 5 && day !== 6) {
+                return ['disabled-day'];
+            }
+        }
+    });
 
     calendar.render();
 });
