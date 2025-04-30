@@ -201,6 +201,7 @@ button.delete-btn:hover {
   cursor: pointer;
   font-size: 16px;
   transition: background-color 0.3s;
+  margin: 20px auto 0 auto;
 }
 
 #logoutBtn:hover {
@@ -376,6 +377,7 @@ a:hover {
   border-radius: 10px;
   cursor: pointer;
   font-size: 16px;
+  margin: 20px auto 0 auto;
 }
 
 #logoutBtn:hover {
@@ -422,6 +424,10 @@ main {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+}
+
+.users-list h2 {
+  text-align: center;
 }
 
 /* Estilo para el switch */
