@@ -4,9 +4,6 @@ import { auth, db } from './firebase-config.js';
 // Firebase Auth y Firestore SDKs
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { guardarUsuarioPorCedula } from './firestore-utils.js'; // <-- NUEVO IMPORT
-import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-// Funciones reutilizables
 import { showAlert } from './showAlert.js';
 
 // Obtener el formulario
@@ -16,8 +13,6 @@ const passwordInput = document.getElementById('password');
 const fullNameInput = document.getElementById('full_name');
 const cedulaInput = document.getElementById('cedula');
 const phoneInput = document.getElementById('phone');
-
-const db = getFirestore(); // Inicializamos Firestore
 
 registerForm.addEventListener('submit', async function(event) {
   event.preventDefault();
