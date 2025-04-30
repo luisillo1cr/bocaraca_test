@@ -1,10 +1,13 @@
-// register.js
+// Firebase core config
 import { auth } from './firebase-config.js';
-import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Importamos Firestore
 
-// Función de alertas visuales
-import { showAlert } from './showAlert.js'; // Asegúrate de tener este archivo o este código en tu proyecto
+// Firebase Auth y Firestore SDKs
+import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+// Funciones reutilizables
+import { guardarUsuarioPorCedula } from './firestore-utils.js'; // <-- NUEVO IMPORT
+import { showAlert } from './showAlert.js';
 
 // Obtener el formulario
 const registerForm = document.getElementById('registerForm');
@@ -29,24 +32,18 @@ registerForm.addEventListener('submit', async function(event) {
     // Crear usuario en Firebase Authentication
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-
-    // Guardar datos adicionales en Firestore
-    await setDoc(doc(db, "users", user.uid), { // Guardamos la información en Firestore
-      fullName: fullName,
-      cedula: cedula,
-      phone: phone,
-      email: email,
-      isAuthorized: true // O cualquier otro campo que quieras agregar, como si está autorizado
-    });
-
+  
+    // Guardar datos adicionales en Firestore con la cédula como ID
+    await guardarUsuarioPorCedula(cedula, fullName, phone, email);
+  
     // Mostrar alerta de éxito
     showAlert("Usuario registrado exitosamente: " + email, 'success');
-
+  
     // Redirigir después de un pequeño delay para ver la alerta
     setTimeout(() => {
       window.location.href = "./index.html"; 
     }, 1500);
-
+  
   } catch (error) {
     console.error('Error en el registro:', error.message);
     showAlert('Error al registrar: ' + error.message, 'error');
