@@ -1,56 +1,16 @@
 import { auth, db } from './firebase-config.js';
 import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { collection, query, onSnapshot, updateDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import {
+    collection,
+    query,
+    onSnapshot,
+    updateDoc,
+    doc
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
 document.addEventListener('DOMContentLoaded', function () {
-    // Mostrar los usuarios registrados con su nombre y estado de autorización
-    const usersListContainer = document.getElementById('users-list'); // Asegúrate de tener un contenedor con este id
-
-    const usersQuery = query(collection(db, 'users'));
-    onSnapshot(usersQuery, (querySnapshot) => {
-        usersListContainer.innerHTML = '';  // Limpiar la lista antes de agregar nuevos elementos
-        querySnapshot.forEach(doc => {
-            const data = doc.data();
-            const userId = doc.id;
-            const nombre = data.nombre;
-            const autorizado = data.autorizado;
-
-            // Crear un elemento de usuario con un switch
-            const userElement = document.createElement('div');
-            userElement.classList.add('user-item');
-            userElement.innerHTML = `
-                <span>${nombre} (${data.cedula})</span>
-                <label class="switch">
-                    <input type="checkbox" ${autorizado ? 'checked' : ''} data-user-id="${userId}">
-                    <span class="slider round"></span>
-                </label>
-            `;
-
-            // Agregar el elemento a la lista
-            usersListContainer.appendChild(userElement);
-
-            // Detectar el cambio en el switch para actualizar la autorización
-            const switchInput = userElement.querySelector('input[type="checkbox"]');
-            switchInput.addEventListener('change', async (event) => {
-                const userId = event.target.getAttribute('data-user-id');
-                const authorized = event.target.checked;
-
-                try {
-                    const userRef = doc(db, 'users', userId);
-                    await updateDoc(userRef, { autorizado: authorized });
-                    showAlert(`El usuario ${nombre} ahora está ${authorized ? 'autorizado' : 'desautorizado'} para hacer reservas.`, 'success');
-                } catch (error) {
-                    console.error('Error al actualizar la autorización del usuario:', error);
-                    showAlert('Hubo un error al actualizar la autorización.', 'error');
-                }
-            });
-        });
-    }, (error) => {
-        console.error('Error al obtener los usuarios:', error);
-    });
-
-    // Aquí va tu código actual del calendario que sigue funcionando como antes.
+    // Inicializar calendario
     const calendarEl = document.getElementById('calendar');
 
     const calendar = new FullCalendar.Calendar(calendarEl, {
@@ -67,8 +27,8 @@ document.addEventListener('DOMContentLoaded', function () {
             onSnapshot(q, (querySnapshot) => {
                 const reservationsByDate = {};
 
-                querySnapshot.forEach(doc => {
-                    const data = doc.data();
+                querySnapshot.forEach(docSnap => {
+                    const data = docSnap.data();
                     const date = data.date;
                     const name = data.nombre || "Desconocido";
 
@@ -95,10 +55,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 failureCallback(error);
             });
         },
-        eventClick: function(info) {
+        eventClick: function (info) {
             info.jsEvent.preventDefault();
         },
-        eventMouseEnter: function(info) {
+        eventMouseEnter: function (info) {
             const tooltip = document.createElement('div');
             tooltip.className = 'custom-tooltip';
             tooltip.innerHTML = `<strong>Usuarios:</strong><br>${info.event.extendedProps.names.join('<br>')}`;
@@ -113,11 +73,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             info.el.addEventListener('mousemove', positionTooltip);
 
-            info.el.addEventListener('mouseleave', function() {
+            info.el.addEventListener('mouseleave', function () {
                 tooltip.remove();
             });
         },
-        dayCellClassNames: function(arg) {
+        dayCellClassNames: function (arg) {
             const day = arg.date.getDay();
             if (day !== 5 && day !== 6) {
                 return ['disabled-day'];
@@ -126,8 +86,51 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     calendar.render();
+
+    // Mostrar lista de usuarios registrados
+    const usersListContainer = document.getElementById('usersList');
+
+    const usersQuery = query(collection(db, 'users'));
+    onSnapshot(usersQuery, (querySnapshot) => {
+        usersListContainer.innerHTML = ''; // Limpiar lista antes de volver a renderizar
+
+        querySnapshot.forEach(userDoc => {
+            const data = userDoc.data();
+            const userId = userDoc.id;
+            const nombre = data.nombre;
+            const autorizado = data.autorizado;
+
+            const userElement = document.createElement('div');
+            userElement.classList.add('user-item');
+            userElement.innerHTML = `
+                <span>${nombre} (${data.cedula})</span>
+                <label class="switch">
+                    <input type="checkbox" ${autorizado ? 'checked' : ''} data-user-id="${userId}">
+                    <span class="slider round"></span>
+                </label>
+            `;
+
+            usersListContainer.appendChild(userElement);
+
+            const switchInput = userElement.querySelector('input[type="checkbox"]');
+            switchInput.addEventListener('change', async (event) => {
+                const userId = event.target.getAttribute('data-user-id');
+                const authorized = event.target.checked;
+
+                try {
+                    const userRef = doc(db, 'users', userId);
+                    await updateDoc(userRef, { autorizado: authorized });
+                    showAlert(`El usuario ${nombre} ahora está ${authorized ? 'autorizado' : 'desautorizado'}.`, 'success');
+                } catch (error) {
+                    console.error('Error al actualizar la autorización del usuario:', error);
+                    showAlert('Hubo un error al actualizar la autorización.', 'error');
+                }
+            });
+        });
+    });
 });
 
+// Cierre de sesión
 const logoutBtn = document.getElementById('logoutBtn');
 logoutBtn.addEventListener('click', async () => {
     try {
