@@ -148,10 +148,28 @@ function openConfirmReservationModal(date, time) {
 
     document.getElementById('confirmBtn').onclick = async () => {
         try {
+            // 🔒 Validar si el usuario está autorizado
+            const q = query(collection(db, 'users'), where('correo', '==', auth.currentUser.email));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                showAlert('Usuario no encontrado en la base de datos.', 'error');
+                closeModal();
+                return;
+            }
+
+            const userData = querySnapshot.docs[0].data();
+            if (!userData.autorizado) {
+                showAlert('No estás autorizado para hacer reservas. Consulta con el administrador.', 'error');
+                closeModal();
+                return;
+            }
+
             await addReservation(date, time);
             showAlert('Reserva confirmada', 'success');
             closeModal();
             calendar.refetchEvents();
+
         } catch (err) {
             console.error('Error al confirmar reserva:', err);
             showAlert('Error al confirmar reserva.', 'error');
@@ -160,6 +178,7 @@ function openConfirmReservationModal(date, time) {
 
     document.getElementById('cancelBtn').onclick = closeModal;
 }
+
 
 function openDeleteReservationModal(reservationId, date, time) {
     closeModal();
