@@ -15,30 +15,25 @@
     </div>
 
     <!-- Formulario de actualización de datos -->
-    <div class="card">
-      <form id="profileForm">
+    <div>
+      <form id="profileForm" class="card" autocomplete="off">
         <label for="fullName">Nombre Completo</label>
         <input type="text" id="fullName" name="fullName" placeholder="Nombre Completo" required>
-
         <label for="idNumber">Cédula</label>
         <input type="text" id="idNumber" name="idNumber" placeholder="Cédula" required>
-
         <label for="email">Correo Electrónico</label>
         <input type="email" id="email" name="email" placeholder="Correo Electrónico" required>
-
         <button type="submit">Guardar Cambios</button>
       </form>
     </div>
-
-    <div class="center-button">
-      <a href="./client-dashboard.html" class="btn-profile">Regresar al Calendario</a>
-    </div>
+    <button type="submit">Regresar al Calendario</button>
+    <button id="logoutBtn" href="./client-dashboard.html">Regresar al Calendario</button>
   </main>
 
   <footer>
     <p>© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
   </footer>
   
-  <script src="./js/profile.js"></script>
+  <script src="./js/profile-data.js"></script>
 </body>
 </html>
