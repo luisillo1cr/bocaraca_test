@@ -6,7 +6,8 @@ import {
   query,
   where,
   getDocs,
-  addDoc
+  setDoc,
+  doc
 } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -33,7 +34,7 @@ registerForm.addEventListener("submit", async (e) => {
   }
 
   try {
-    // Validar si ya existe una cédula registrada
+    // Verificar si la cédula ya existe
     const q = query(collection(db, "users"), where("cedula", "==", cedula));
     const querySnapshot = await getDocs(q);
 
@@ -42,12 +43,12 @@ registerForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    // Crear el usuario en Firebase Auth
+    // Crear el usuario en Auth
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Guardar en Firestore
-    await addDoc(collection(db, "users"), {
+    // Guardar información en Firestore en /users/{uid}
+    await setDoc(doc(db, "users", user.uid), {
       uid: user.uid,
       nombre: fullName,
       cedula,
