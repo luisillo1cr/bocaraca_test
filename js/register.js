@@ -1,36 +1,49 @@
-// Firebase core config
-import { auth } from './firebase-config.js';
+import { auth, db } from './firebase-config.js';
+import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+import { doc, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-// Firebase Auth SDK
-import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { showAlert } from './showAlert.js';
+const form = document.getElementById('registerForm');
+const toastContainer = document.getElementById('toast-container');
 
-// Obtener el formulario
-const registerForm = document.getElementById('registerForm');
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
 
-registerForm.addEventListener('submit', async function(event) {
-  event.preventDefault();
-  
-  const email = emailInput.value;
-  const password = passwordInput.value;
+  const cedula = form.cedula.value.trim();
+  const nombre = form.nombre.value.trim();
+  const email = form.email.value.trim();
+  const password = form.password.value;
 
   try {
     // Crear usuario en Firebase Authentication
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-  
-    // Mostrar alerta de éxito
-    showAlert("Usuario registrado exitosamente: " + email, 'success');
-  
-    // Redirigir a la página de ingreso de datos personales
+    const uid = userCredential.user.uid;
+
+    // Guardar en Firestore
+    await setDoc(doc(db, 'usuarios', uid), {
+      cedula,
+      nombre,
+      email,
+      uid,
+      autorizado: false,
+      esAdmin: false
+    });
+
+    mostrarToast('Registro exitoso ✅', 'success');
+    form.reset();
+
     setTimeout(() => {
-      window.location.href = "./profile-data.html"; // Nueva página para ingresar los datos
-    }, 1500);
-  
+      window.location.href = 'login.html';
+    }, 2000);
   } catch (error) {
-    console.error('Error en el registro:', error.message);
-    showAlert('Error al registrar: ' + error.message, 'error');
+    console.error(error);
+    mostrarToast('Error: ' + error.message, 'error');
   }
 });
+
+function mostrarToast(mensaje, tipo = 'success') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${tipo}`;
+  toast.textContent = mensaje;
+  toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
