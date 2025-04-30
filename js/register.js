@@ -1,4 +1,4 @@
-import { auth, db } from './firebase-config.js';
+import { auth, db, app } from './firebase-config.js';
 import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 import { doc, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
@@ -9,7 +9,8 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const cedula = form.cedula.value.trim();
-  const nombre = form.nombre.value.trim();
+  const nombre = form.full_name.value.trim();  // Corregir aquí
+  const phone = form.phone.value.trim();      // Nuevo campo "Celular"
   const email = form.email.value.trim();
   const password = form.password.value;
 
@@ -22,6 +23,7 @@ form.addEventListener('submit', async (e) => {
     await setDoc(doc(db, 'usuarios', uid), {
       cedula,
       nombre,
+      phone,         // Agregar celular aquí
       email,
       uid,
       autorizado: false,
