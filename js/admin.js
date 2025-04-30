@@ -1,5 +1,5 @@
 import { auth, db } from './firebase-config.js';
-import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     collection,
     query,
@@ -9,23 +9,23 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-document.addEventListener('DOMContentLoaded', function () {
-    // Lista de UIDs de administradores
+document.addEventListener('DOMContentLoaded', () => {
     const ADMIN_UIDS = [
         "TWAkND9zF0UKdMzswAPkgas9zfL2", // ivan.cicc@hotmail.com
         "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"  // luis.davidsolorzano@outlook.es
     ];
 
-    const auth = firebase.auth();
-    const currentUser = auth.currentUser;
+    onAuthStateChanged(auth, (user) => {
+        if (!user || !ADMIN_UIDS.includes(user.uid)) {
+            window.location.href = './index.html';
+            return;
+        }
 
-    // Verificar si el usuario está en la whitelist de administradores
-    if (!currentUser || !ADMIN_UIDS.includes(currentUser.uid)) {
-        // Si no es admin, redirigir a la página principal
-        window.location.href = './index.html';
-        return;
-    }
+        iniciarPanelAdmin();
+    });
+});
 
+function iniciarPanelAdmin() {
     // Inicializar calendario
     const calendarEl = document.getElementById('calendar');
 
@@ -88,10 +88,7 @@ document.addEventListener('DOMContentLoaded', function () {
             positionTooltip(info.jsEvent);
 
             info.el.addEventListener('mousemove', positionTooltip);
-
-            info.el.addEventListener('mouseleave', function () {
-                tooltip.remove();
-            });
+            info.el.addEventListener('mouseleave', () => tooltip.remove());
         },
         dayCellClassNames: function (arg) {
             const day = arg.date.getDay();
@@ -105,10 +102,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Mostrar lista de usuarios registrados
     const usersListContainer = document.getElementById('usersList');
-
     const usersQuery = query(collection(db, 'users'));
+
     onSnapshot(usersQuery, (querySnapshot) => {
-        usersListContainer.innerHTML = ''; // Limpiar lista antes de volver a renderizar
+        usersListContainer.innerHTML = '';
 
         querySnapshot.forEach(userDoc => {
             const data = userDoc.data();
@@ -144,19 +141,19 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     });
-});
 
-// Cierre de sesión
-const logoutBtn = document.getElementById('logoutBtn');
-logoutBtn.addEventListener('click', async () => {
-    try {
-        await signOut(auth);
-        showAlert("Has cerrado sesión", 'success');
-        setTimeout(() => {
-            window.location.href = "./index.html";
-        }, 1500);
-    } catch (error) {
-        console.error('Error al cerrar sesión:', error.message);
-        showAlert('Hubo un problema al cerrar sesión.', 'error');
-    }
-});
+    // Cierre de sesión
+    const logoutBtn = document.getElementById('logoutBtn');
+    logoutBtn.addEventListener('click', async () => {
+        try {
+            await signOut(auth);
+            showAlert("Has cerrado sesión", 'success');
+            setTimeout(() => {
+                window.location.href = "./index.html";
+            }, 1500);
+        } catch (error) {
+            console.error('Error al cerrar sesión:', error.message);
+            showAlert('Hubo un problema al cerrar sesión.', 'error');
+        }
+    });
+}
