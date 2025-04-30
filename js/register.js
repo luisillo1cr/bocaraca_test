@@ -20,7 +20,7 @@ form.addEventListener('submit', async (e) => {
     const uid = userCredential.user.uid;
 
     // Guardar en Firestore
-    await setDoc(doc(db, 'usuarios', uid), {
+    await setDoc(doc(db, 'users', uid), {
       cedula,
       nombre,
       phone,         // Agregar celular aquí
