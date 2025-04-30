@@ -403,4 +403,16 @@ main {
   flex: 1; /* El contenido ocupa todo el espacio disponible */
 }
 
+.custom-tooltip {
+  position: absolute;
+  background-color: #161b22; /* Coincide con tu estilo oscuro */
+  color: #c9d1d9;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  pointer-events: none;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  z-index: 9999;
+  white-space: pre-line;
+}
 
