@@ -1,6 +1,6 @@
-import { auth, db, app } from './firebase-config.js';
+import { auth, db } from './firebase-config.js';
 import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { doc, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import { ref, set } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js';
 
 const form = document.getElementById('registerForm');
 const toastContainer = document.getElementById('toast-container');
@@ -9,8 +9,7 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const cedula = form.cedula.value.trim();
-  const nombre = form.full_name.value.trim();  // Corregir aquí
-  const phone = form.phone.value.trim();      // Nuevo campo "Celular"
+  const nombre = form.nombre.value.trim();
   const email = form.email.value.trim();
   const password = form.password.value;
 
@@ -19,11 +18,11 @@ form.addEventListener('submit', async (e) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const uid = userCredential.user.uid;
 
-    // Guardar en Firestore
-    await setDoc(doc(db, 'users', uid), {
+    // Guardar en Firebase Realtime Database
+    const userRef = ref(db, 'users/' + uid);  // 'users' es la colección en Realtime Database
+    await set(userRef, {
       cedula,
       nombre,
-      phone,         // Agregar celular aquí
       email,
       uid,
       autorizado: false,
