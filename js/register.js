@@ -1,56 +1,97 @@
-import { auth, db } from './firebase-config.js';
-import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { ref, set } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc
+} from "https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
 
-const form = document.getElementById('registerForm');
-const toastContainer = document.getElementById('toast-container');
+// Inicializar Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-form.addEventListener('submit', async (e) => {
+// Formulario
+const registerForm = document.getElementById("registerForm");
+
+registerForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const cedula = form.cedula.value.trim();
-  const nombre = form.nombre.value.trim();
-  const email = form.email.value.trim();
-  const password = form.password.value;
+  const fullName = document.getElementById("nombre").value.trim();
+  const cedula = document.getElementById("cedula").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+
+  if (!fullName || !cedula || !phone || !email || !password) {
+    showToast("Por favor, completa todos los campos", "error");
+    return;
+  }
 
   try {
-    // Crear usuario en Firebase Authentication
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const uid = userCredential.user.uid;
-    console.log('UID del nuevo usuario:', uid);  // Aquí estamos mostrando el UID en la consola
+    // Validar si ya existe una cédula registrada
+    const q = query(collection(db, "usuarios"), where("cedula", "==", cedula));
+    const querySnapshot = await getDocs(q);
 
-    // Guardar en Firebase Realtime Database
-    const userRef = ref(db, 'users/' + uid);  // 'users' es la colección en Realtime Database
-    console.log('Referencia de usuario en la base de datos:', userRef);
-    await set(userRef, {
+    if (!querySnapshot.empty) {
+      showToast("Ya existe un usuario registrado con esta cédula", "error");
+      return;
+    }
+
+    // Crear el usuario en Firebase Auth
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // Guardar en Firestore
+    await addDoc(collection(db, "usuarios"), {
+      uid: user.uid,
+      nombre: fullName,
       cedula,
-      nombre,
-      email,
-      uid,
+      correo: email,
+      celular: phone,
       autorizado: false,
-      esAdmin: false
-    }).then(() => {
-      console.log('Datos guardados correctamente en Realtime Database');
-    }).catch((error) => {
-      console.error('Error al guardar en la base de datos:', error);
+      reservas: 0,
     });
 
-    mostrarToast('Registro exitoso ✅', 'success');
-    form.reset();
+    showToast("Registro exitoso. Redirigiendo...", "success");
 
     setTimeout(() => {
-      window.location.href = 'login.html';
+      window.location.href = "./index.html";
     }, 2000);
+
   } catch (error) {
-    console.error(error);
-    mostrarToast('Error: ' + error.message, 'error');
+    const mensaje = mapAuthError(error.code);
+    showToast(mensaje, "error");
   }
 });
 
-function mostrarToast(mensaje, tipo = 'success') {
-  const toast = document.createElement('div');
-  toast.className = `toast ${tipo}`;
-  toast.textContent = mensaje;
-  toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
+// Función para mostrar mensajes
+function showToast(message, type = "success") {
+  const container = document.getElementById("toast-container");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.innerText = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// Mapeo de errores de Firebase
+function mapAuthError(code) {
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "Este correo ya está registrado";
+    case "auth/weak-password":
+      return "La contraseña debe tener al menos 6 caracteres";
+    case "auth/invalid-email":
+      return "El correo no es válido";
+    default:
+      return "Error al registrar. Intenta de nuevo.";
+  }
 }
