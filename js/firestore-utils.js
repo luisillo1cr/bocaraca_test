@@ -2,6 +2,8 @@
 import { doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db } from './firebase-config.js'; // Ahora importa db correctamente
 
+
+
 export async function guardarUsuarioPorCedula(cedula, fullName, phone, email) {
   try {
     await setDoc(doc(db, "users", cedula), {
