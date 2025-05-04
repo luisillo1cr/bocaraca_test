@@ -5,7 +5,8 @@ import {
     query,
     onSnapshot,
     updateDoc,
-    doc
+    doc,
+    setDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
@@ -26,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function iniciarPanelAdmin() {
-    // Inicializar calendario
     const calendarEl = document.getElementById('calendar');
 
     const calendar = new FullCalendar.Calendar(calendarEl, {
@@ -100,12 +100,11 @@ function iniciarPanelAdmin() {
 
     calendar.render();
 
-    // Mostrar lista de usuarios registrados
     const usersListContainer = document.getElementById('usersList');
     const usersQuery = query(collection(db, 'users'));
 
     onSnapshot(usersQuery, (querySnapshot) => {
-        usersListContainer.innerHTML = ''; // Limpiar lista antes de volver a llenarla
+        usersListContainer.innerHTML = '';
 
         querySnapshot.forEach(userDoc => {
             const data = userDoc.data();
@@ -143,18 +142,20 @@ function iniciarPanelAdmin() {
                 }
             });
 
-            // Evento para marcar la asistencia
             const attendanceCheckbox = userElement.querySelector('.attendance-input');
             attendanceCheckbox.addEventListener('change', async (event) => {
                 const userId = event.target.getAttribute('data-user-id');
                 const attended = event.target.checked;
-                const userRef = doc(db, 'users', userId);
+                const fecha = new Date().toISOString().split('T')[0];
+                const hora = new Date().toTimeString().slice(0, 5);
 
                 try {
-                    // Registrar la asistencia en la subcolección "asistencia"
-                    const attendanceRef = doc(userRef, 'asistencias', new Date().toISOString().split('T')[0]); // Fecha como ID
-                    await updateDoc(attendanceRef, { attended });
-
+                    const asistenciaRef = doc(db, 'asistencias', fecha, 'usuarios', userId);
+                    await setDoc(asistenciaRef, {
+                        nombre,
+                        hora,
+                        presente: attended
+                    });
                     showAlert(`${nombre} ${attended ? 'ha asistido' : 'no ha asistido'}.`, 'success');
                 } catch (error) {
                     console.error('Error al registrar la asistencia:', error);
@@ -164,7 +165,6 @@ function iniciarPanelAdmin() {
         });
     });
 
-    // Cierre de sesión
     const logoutBtn = document.getElementById('logoutBtn');
     logoutBtn.addEventListener('click', async () => {
         try {
