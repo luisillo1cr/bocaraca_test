@@ -255,7 +255,7 @@
     // Función para marcar asistencia en Firestore
     async function markAttendance(userId, attended) {
       const userRef = doc(db, "users", userId);
-      const attendanceRef = doc(userRef, "asistencia", new Date().toISOString().split('T')[0]);  // Usar fecha como ID
+      const attendanceRef = doc(userRef, "asistencias", new Date().toISOString().split('T')[0]);  // Usar fecha como ID
 
       await setDoc(attendanceRef, { attended });
     }

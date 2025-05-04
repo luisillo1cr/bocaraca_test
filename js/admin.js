@@ -152,7 +152,7 @@ function iniciarPanelAdmin() {
 
                 try {
                     // Registrar la asistencia en la subcolección "asistencia"
-                    const attendanceRef = doc(userRef, 'asistencia', new Date().toISOString().split('T')[0]); // Fecha como ID
+                    const attendanceRef = doc(userRef, 'asistencias', new Date().toISOString().split('T')[0]); // Fecha como ID
                     await updateDoc(attendanceRef, { attended });
 
                     showAlert(`${nombre} ${attended ? 'ha asistido' : 'no ha asistido'}.`, 'success');
