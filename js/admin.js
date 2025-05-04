@@ -113,7 +113,7 @@ function iniciarPanelAdmin() {
             const autorizado = data.autorizado;
 
             const userElement = document.createElement('div');
-            userElement.classList.add('user-item');
+            userElement.classList.add('user-card');
             userElement.innerHTML = `
                 <span>${nombre} (${data.cedula})</span>
                 <label class="switch">
