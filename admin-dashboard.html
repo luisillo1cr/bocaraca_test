@@ -21,11 +21,14 @@
       font-family: Arial, sans-serif;
       background-color: #0d1117;
       color: #c9d1d9;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
     }
 
     .dashboard {
       display: flex;
-      height: 100vh;
+      flex: 1;
     }
 
     .sidebar {
@@ -97,6 +100,39 @@
       display: none;
     }
 
+    .user-card {
+      background-color: #21262d;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .user-card h3 {
+      margin: 0;
+      color: #c9d1d9;
+    }
+
+    .user-card button {
+      background-color: #238636;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .user-card button:hover {
+      background-color: #2ea043;
+    }
+
+    .attendance-checkbox {
+      margin-left: 10px;
+    }
+
     @media (max-width: 768px) {
       .main-content {
         margin-left: 0;
@@ -107,8 +143,18 @@
         left: 10px;
       }
     }
-  </style>
 
+    footer {
+      text-align: center;
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #161b22;
+      color: #c9d1d9;
+      position: relative;
+      bottom: 0;
+      width: 100%;
+    }
+  </style>
 </head>
 <body>
   <div class="dashboard">
@@ -143,7 +189,9 @@
       <section id="studentsSection" class="hidden">
         <div class="card">
           <h2>Usuarios Registrados</h2>
-          <ul id="usersList" class="user-list"></ul>
+          <div id="usersList" class="user-list">
+            <!-- Las tarjetas de los estudiantes se llenarán dinámicamente con JS -->
+          </div>
         </div>
       </section>
     </main>
@@ -155,8 +203,11 @@
   <script type="module">
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
     import { app } from './js/firebase-config.js';
+    import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js";
 
     const auth = getAuth(app);
+    const db = getFirestore(app);
+
     onAuthStateChanged(auth, (user) => {
       if (!user) {
         window.location.href = './index.html';
@@ -164,29 +215,53 @@
         console.log("Admin autenticado:", user.email);
       }
     });
-  </script>
 
-  <script>
-    // Mostrar/Ocultar Sidebar
-    const toggleBtn = document.getElementById("toggleSidebar");
-    const sidebar = document.getElementById("sidebar");
+    // Obtener y mostrar estudiantes en tarjetas
+    async function loadUsers() {
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("autorizado", "==", true));
+      const querySnapshot = await getDocs(q);
 
-    toggleBtn.addEventListener("click", () => {
-      sidebar.classList.toggle("closed");
-    });
+      const usersList = document.getElementById("usersList");
+      usersList.innerHTML = '';  // Limpiar lista
 
-    // Navegación entre secciones
-    document.querySelectorAll(".nav-link").forEach(link => {
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
-        link.classList.add("active");
+      querySnapshot.forEach((doc) => {
+        const userData = doc.data();
+        const userCard = document.createElement("div");
+        userCard.classList.add("user-card");
 
-        const target = link.getAttribute("data-target");
-        document.querySelectorAll("section").forEach(sec => sec.classList.add("hidden"));
-        document.getElementById(target).classList.remove("hidden");
+        userCard.innerHTML = `
+          <h3>${userData.nombre}</h3>
+          <div>
+            <button class="attend-btn" data-user-id="${doc.id}">Marcar Asistencia</button>
+            <label class="attendance-checkbox">
+              <input type="checkbox" data-user-id="${doc.id}" /> Asistió
+            </label>
+          </div>
+        `;
+        
+        usersList.appendChild(userCard);
+        
+        // Agregar evento para marcar asistencia
+        const checkbox = userCard.querySelector("input[type='checkbox']");
+        checkbox.addEventListener("change", (e) => {
+          const userId = e.target.getAttribute("data-user-id");
+          const attendance = e.target.checked;
+          markAttendance(userId, attendance);
+        });
       });
-    });
+    }
+
+    // Función para marcar asistencia en Firestore
+    async function markAttendance(userId, attended) {
+      const userRef = doc(db, "users", userId);
+      const attendanceRef = doc(userRef, "asistencia", new Date().toISOString().split('T')[0]);  // Usar fecha como ID
+
+      await setDoc(attendanceRef, { attended });
+    }
+
+    // Cargar usuarios cuando se muestre la sección
+    document.querySelector(".nav-link[data-target='studentsSection']").addEventListener("click", loadUsers);
   </script>
 
   <footer>

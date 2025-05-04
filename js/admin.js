@@ -105,7 +105,7 @@ function iniciarPanelAdmin() {
     const usersQuery = query(collection(db, 'users'));
 
     onSnapshot(usersQuery, (querySnapshot) => {
-        usersListContainer.innerHTML = '';
+        usersListContainer.innerHTML = ''; // Limpiar lista antes de volver a llenarla
 
         querySnapshot.forEach(userDoc => {
             const data = userDoc.data();
@@ -120,6 +120,9 @@ function iniciarPanelAdmin() {
                 <label class="switch">
                     <input type="checkbox" ${autorizado ? 'checked' : ''} data-user-id="${userId}">
                     <span class="slider round"></span>
+                </label>
+                <label class="attendance-checkbox">
+                    <input type="checkbox" data-user-id="${userId}" class="attendance-input"> Asistió
                 </label>
             `;
 
@@ -137,6 +140,25 @@ function iniciarPanelAdmin() {
                 } catch (error) {
                     console.error('Error al actualizar la autorización del usuario:', error);
                     showAlert('Hubo un error al actualizar la autorización.', 'error');
+                }
+            });
+
+            // Evento para marcar la asistencia
+            const attendanceCheckbox = userElement.querySelector('.attendance-input');
+            attendanceCheckbox.addEventListener('change', async (event) => {
+                const userId = event.target.getAttribute('data-user-id');
+                const attended = event.target.checked;
+                const userRef = doc(db, 'users', userId);
+
+                try {
+                    // Registrar la asistencia en la subcolección "asistencia"
+                    const attendanceRef = doc(userRef, 'asistencia', new Date().toISOString().split('T')[0]); // Fecha como ID
+                    await updateDoc(attendanceRef, { attended });
+
+                    showAlert(`${nombre} ${attended ? 'ha asistido' : 'no ha asistido'}.`, 'success');
+                } catch (error) {
+                    console.error('Error al registrar la asistencia:', error);
+                    showAlert('Hubo un error al registrar la asistencia.', 'error');
                 }
             });
         });
