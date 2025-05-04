@@ -10,19 +10,41 @@
 
   <link rel="stylesheet" href="./css/style.css">
   <link rel="icon" href="./assets/favicon-32x32.png" type="image/x-icon">
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #0d1117;
+      color: #c9d1d9;
+    }
+
     .dashboard {
       display: flex;
-      min-height: 100vh;
+      height: 100vh;
     }
 
     .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 220px;
+      height: 100%;
       background-color: #161b22;
       padding: 20px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      transition: transform 0.3s ease;
+      z-index: 1000;
+    }
+
+    .sidebar.closed {
+      transform: translateX(-100%);
     }
 
     .sidebar h2 {
@@ -49,18 +71,48 @@
 
     .main-content {
       flex: 1;
+      margin-left: 220px;
       padding: 20px;
+      transition: margin-left 0.3s ease;
+    }
+
+    .sidebar-toggle {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background-color: #238636;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 6px;
+      cursor: pointer;
+      z-index: 1100;
+    }
+
+    .sidebar.closed + .main-content {
+      margin-left: 0;
     }
 
     .hidden {
       display: none;
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        margin-left: 0;
+      }
+
+      .sidebar-toggle {
+        top: 10px;
+        left: 10px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="dashboard">
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div>
         <h2>Panel Admin</h2>
         <nav>
@@ -71,8 +123,11 @@
       <button id="logoutBtn">Cerrar sesión</button>
     </aside>
 
+    <!-- Botón de hamburguesa -->
+    <button class="sidebar-toggle" id="toggleSidebar">☰</button>
+
     <!-- Main Content -->
-    <main class="main-content">
+    <main class="main-content" id="mainContent">
       <div class="logo-container">
         <img src="./assets/android-chrome-512x512.png" alt="Logo" class="logo-img">
         <h1 class="logo-text">Panel de Reservas</h1>
@@ -111,6 +166,14 @@
   </script>
 
   <script>
+    // Mostrar/Ocultar Sidebar
+    const toggleBtn = document.getElementById("toggleSidebar");
+    const sidebar = document.getElementById("sidebar");
+
+    toggleBtn.addEventListener("click", () => {
+      sidebar.classList.toggle("closed");
+    });
+
     // Navegación entre secciones
     document.querySelectorAll(".nav-link").forEach(link => {
       link.addEventListener("click", (e) => {
@@ -119,9 +182,7 @@
         link.classList.add("active");
 
         const target = link.getAttribute("data-target");
-        document.querySelectorAll("section").forEach(sec => {
-          sec.classList.add("hidden");
-        });
+        document.querySelectorAll("section").forEach(sec => sec.classList.add("hidden"));
         document.getElementById(target).classList.remove("hidden");
       });
     });
