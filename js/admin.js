@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         iniciarPanelAdmin();
     });
+
+    
+
 });
 
 function iniciarPanelAdmin() {
@@ -105,33 +108,31 @@ function iniciarPanelAdmin() {
 
     onSnapshot(usersQuery, (querySnapshot) => {
         usersListContainer.innerHTML = '';
-
+    
         querySnapshot.forEach(userDoc => {
             const data = userDoc.data();
             const userId = userDoc.id;
             const nombre = data.nombre;
             const autorizado = data.autorizado;
-
+    
             const userElement = document.createElement('div');
             userElement.classList.add('user-card');
             userElement.innerHTML = `
-                <span>${nombre} (${data.cedula})</span>
-                <label class="switch">
-                    <input type="checkbox" ${autorizado ? 'checked' : ''} data-user-id="${userId}">
-                    <span class="slider round"></span>
-                </label>
-                <label class="attendance-checkbox">
-                    <input type="checkbox" data-user-id="${userId}" class="attendance-input"> Asistió
-                </label>
+                <h3>${nombre} (${data.cedula})</h3>
+                <div>
+                  <button class="attend-btn" data-user-id="${userId}">Marcar Asistencia</button>
+                  <label class="attendance-checkbox">
+                    <input type="checkbox" class="attendance-input" data-user-id="${userId}"> Asistió
+                  </label>
+                </div>
             `;
-
+    
             usersListContainer.appendChild(userElement);
-
-            const switchInput = userElement.querySelector('input[type="checkbox"]');
+    
+            const switchInput = userElement.querySelector('input[type="checkbox"]:not(.attendance-input)');
             switchInput.addEventListener('change', async (event) => {
-                const userId = event.target.getAttribute('data-user-id');
                 const authorized = event.target.checked;
-
+    
                 try {
                     const userRef = doc(db, 'users', userId);
                     await updateDoc(userRef, { autorizado: authorized });
@@ -141,30 +142,28 @@ function iniciarPanelAdmin() {
                     showAlert('Hubo un error al actualizar la autorización.', 'error');
                 }
             });
-
+    
             const attendanceCheckbox = userElement.querySelector('.attendance-input');
             attendanceCheckbox.addEventListener('change', async (event) => {
-                const userId = event.target.getAttribute('data-user-id');
                 const attended = event.target.checked;
                 const fecha = new Date().toISOString().split('T')[0];
-                const hora = new Date().toTimeString().slice(0, 5);
-
+                const userRef = doc(db, 'users', userId);
+                const asistenciaRef = doc(collection(userRef, 'asistencias'), fecha);
+    
                 try {
-                    const asistenciaRef = doc(db, 'asistencias', fecha, 'usuarios', userId);
                     await setDoc(asistenciaRef, {
-                        nombre,
-                        hora,
-                        presente: attended
+                        presente: attended,
+                        hora: new Date().toTimeString().slice(0, 5)
                     });
                     showAlert(`${nombre} ${attended ? 'ha asistido' : 'no ha asistido'}.`, 'success');
                 } catch (error) {
-                    console.error('Error al registrar la asistencia:', error);
-                    showAlert('Hubo un error al registrar la asistencia.', 'error');
+                    console.error('Error al guardar asistencia:', error);
+                    showAlert('Error al guardar asistencia.', 'error');
                 }
             });
         });
     });
-
+    
     const logoutBtn = document.getElementById('logoutBtn');
     logoutBtn.addEventListener('click', async () => {
         try {
@@ -178,4 +177,40 @@ function iniciarPanelAdmin() {
             showAlert('Hubo un problema al cerrar sesión.', 'error');
         }
     });
+
+        // Toggle del sidebar
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('toggleSidebar');
+    const mainContent = document.getElementById('mainContent');
+
+    toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('closed');
+        mainContent.classList.toggle('expanded'); // por si quieres ajustar márgenes visualmente
+    });
+
+    // Navegación entre secciones
+    const navLinks = document.querySelectorAll('.nav-link');
+    const calendarSection = document.getElementById('calendarSection');
+    const studentsSection = document.getElementById('studentsSection');
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+
+            const target = link.dataset.target;
+
+            if (target === 'calendarSection') {
+                calendarSection.classList.remove('hidden');
+                studentsSection.classList.add('hidden');
+            } else if (target === 'studentsSection') {
+                calendarSection.classList.add('hidden');
+                studentsSection.classList.remove('hidden');
+            }
+        });
+    });
+
+
 }

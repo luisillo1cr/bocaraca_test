@@ -541,3 +541,7 @@ input:checked + .slider:before {
   flex-direction: column;
   gap: 40px;
 }
+
+.main-content.expanded {
+  margin-left: 0 !important;
+}
