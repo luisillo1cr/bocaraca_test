@@ -153,8 +153,10 @@ function iniciarPanelAdmin() {
                 try {
                     await setDoc(asistenciaRef, {
                         presente: attended,
-                        hora: new Date().toTimeString().slice(0, 5)
-                    });
+                        hora: new Date().toTimeString().slice(0, 5),
+                        fecha: fecha,
+                        uid: userId
+                      });
                     showAlert(`${nombre} ${attended ? 'ha asistido' : 'no ha asistido'}.`, 'success');
                 } catch (error) {
                     console.error('Error al guardar asistencia:', error);

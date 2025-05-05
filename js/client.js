@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html: '<div style="font-size: 20px; color: green; text-align: center;">✔️</div>'
             };
         },
-        dateClick: function (info) {
+        dateClick: async function (info) {
             const selectedDate = info.date;
             const dayOfWeek = selectedDate.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
         
