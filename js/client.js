@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { collection, addDoc, getDocs, query, where, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, addDoc, getDocs, query, where, deleteDoc, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Asegúrate de importar 'setDoc'
 import { showAlert } from './showAlert.js';
 
 let calendar;
@@ -44,33 +44,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 html: '<div style="font-size: 20px; color: green; text-align: center;">✔️</div>'
             };
         },
-        dateClick: async function (info) {
+        dateClick: function (info) {
             const selectedDate = info.date;
             const dayOfWeek = selectedDate.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
         
             // Corregir la fecha a UTC-6
             const adjustedDate = new Date(selectedDate.getTime() - (6 * 60 * 60 * 1000)); // Restamos 6 horas
         
-
-          // limitar cantidad de reservas por dia.
-            const q = query(
-                collection(db, 'reservations'),
-                where('date', '==', date),
-                where('time', '==', time)
-            );
-            const snapshot = await getDocs(q);
-            if (snapshot.size >= 10) {
-                showAlert('Ya se alcanzó el límite de personas para esta clase.', 'error');
-                return;
-            }
-            
-            // evitar fechas en dias pasados
-            const now = new Date();
-            if (adjustedDate < now.setHours(0,0,0,0)) {
-                showAlert('No puedes reservar en una fecha pasada.', 'error');
-                return;
-            }
-
             if (dayOfWeek === 5 || dayOfWeek === 6) { // viernes o sábado
                 const selectedTime = dayOfWeek === 5 ? '20:30' : '09:00';
         
@@ -103,7 +83,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 return ['disabled-day']; // le aplicamos la clase 'disabled-day' a días no reservables
             }
         }
-        
     });
 
     calendar.render();
@@ -140,6 +119,15 @@ async function addReservation(date, time) {
             time: time,
             user: auth.currentUser.email,
             nombre: nombreCompleto
+        });
+
+        // 🔽 Crear documento de asistencia asociado
+        const uid = auth.currentUser.uid;
+        const asistenciaRef = doc(db, 'asistencias', date, 'usuarios', uid);
+        await setDoc(asistenciaRef, {
+            nombre: nombreCompleto,
+            hora: time,
+            presente: false
         });
 
     } catch (error) {
