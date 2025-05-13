@@ -52,7 +52,7 @@ registerForm.addEventListener("submit", async (e) => {
       uid: user.uid,
       nombre: fullName,
       cedula,
-      correo: email,
+      correo: email.toLowerCase(),
       celular: phone,
       autorizado: false,
       reservas: 0,

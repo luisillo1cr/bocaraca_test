@@ -135,7 +135,7 @@ async function checkExistingReservation(date, time) {
 async function addReservation(date, time) {
     try {
         // Buscar el documento del usuario actual en la colección 'users' usando su correo
-        const q = query(collection(db, 'users'), where('correo', '==', auth.currentUser.email));
+        const q = query(collection(db, 'users'), where('correo', '==', auth.currentUser.email.toLowerCase()));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
@@ -191,7 +191,7 @@ function openConfirmReservationModal(date, time) {
     document.getElementById('confirmBtn').onclick = async () => {
         try {
             // 🔒 Validar si el usuario está autorizado
-            const q = query(collection(db, 'users'), where('correo', '==', auth.currentUser.email));
+            const q = query(collection(db, 'users'), where('correo', '==', auth.currentUser.email.toLowerCase()));
             const querySnapshot = await getDocs(q);
 
             if (querySnapshot.empty) {

@@ -1,73 +1,68 @@
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db } from './firebase-config.js';
+import { showAlert } from './showAlert.js';
 
 async function descargarReporteAsistencia() {
-  try {
+try {
+    // Accedemos a la colección 'asistencias'
     const asistenciaRef = collection(db, 'asistencias');
     const snapshot = await getDocs(asistenciaRef);
-    console.log("Número de documentos en 'asistencias':", snapshot.size);
 
+    // Comprobamos cuántos documentos (fechas) hay en 'asistencias'
+    console.log(`Número de documentos en 'asistencias': ${snapshot.size}`);
+
+    // Si no se encontraron documentos, mostramos un mensaje de error
     if (snapshot.empty) {
-      console.log("No se encontraron documentos en la colección 'asistencias'");
-      return;
+    console.log('No se encontraron documentos en la colección "asistencias"');
+    showAlert('No hay registros de asistencia disponibles', 'error');
+    return;
     }
 
-    let datosPresentes = [["Fecha", "Nombre", "Hora", "Presente"]];
-    let datosAusentes = [["Fecha", "Nombre", "Hora", "Presente"]];
+    // Preparamos los encabezados del reporte
+    let datos = [["Fecha", "Nombre", "Hora", "Presente"]];
 
+    // Recorremos los documentos (fechas) en la colección 'asistencias'
     for (const doc of snapshot.docs) {
-      const fecha = doc.id;
-      console.log("Procesando fecha:", fecha);
+      const fecha = doc.id; // Usamos la ID del documento como fecha
 
-      const usuariosRef = collection(db, `asistencias/${fecha}/usuarios`);
-      const usuariosSnap = await getDocs(usuariosRef);
-      console.log("Número de usuarios en esta fecha:", usuariosSnap.size);
+      // Accedemos a la subcolección 'usuarios' para esa fecha
+    const usuariosRef = collection(db, `asistencias/${fecha}/usuarios`);
+    const usuariosSnap = await getDocs(usuariosRef);
 
-      if (usuariosSnap.empty) {
-        console.log("No hay usuarios registrados en la fecha:", fecha);
-        continue;
-      }
+      // Creamos dos listas para separar los usuarios por presencia
+    const usuariosPresentes = [];
+    const usuariosAusentes = [];
 
-      usuariosSnap.forEach(userDoc => {
+      // Recorremos los usuarios de la subcolección
+    usuariosSnap.forEach(userDoc => {
         const data = userDoc.data();
-        console.log("Usuario encontrado:", data);
-
+        // Si el usuario está presente, lo agregamos a la lista de presentes
         if (data.presente) {
-          datosPresentes.push([
-            fecha,
-            data.nombre,
-            data.hora,
-            "Sí"
-          ]);
+        usuariosPresentes.push([fecha, data.nombre, data.hora, "Sí"]);
         } else {
-          datosAusentes.push([
-            fecha,
-            data.nombre,
-            data.hora,
-            "No"
-          ]);
+          // Si el usuario no está presente, lo agregamos a la lista de ausentes
+        usuariosAusentes.push([fecha, data.nombre, data.hora, "No"]);
         }
-      });
+    });
+
+      // Añadimos los usuarios presentes primero
+    datos = datos.concat(usuariosPresentes);
+      // Luego añadimos los usuarios ausentes
+    datos = datos.concat(usuariosAusentes);
     }
 
-    if (datosPresentes.length === 1 && datosAusentes.length === 1) {
-      console.log("No se encontraron registros de asistencia para el mes actual.");
-      alert("No se encontraron registros de asistencia para el mes actual.");
-      return;
-    }
-
-    const wsPresentes = XLSX.utils.aoa_to_sheet(datosPresentes);
-    const wsAusentes = XLSX.utils.aoa_to_sheet(datosAusentes);
-
+    // Usamos la librería 'XLSX' para crear y descargar el archivo Excel
+    const ws = XLSX.utils.aoa_to_sheet(datos);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsPresentes, "Presentes");
-    XLSX.utils.book_append_sheet(wb, wsAusentes, "Ausentes");
+    XLSX.utils.book_append_sheet(wb, ws, "Asistencia");
     XLSX.writeFile(wb, "reporte_asistencia.xlsx");
 
-  } catch (error) {
+} catch (error) {
     console.error("Error al generar el reporte:", error);
-  }
+    showAlert("Hubo un error al generar el reporte", "error");
+}
 }
 
+// Asignamos la función al evento de clic en el botón de descarga
 window.descargarReporteAsistencia = descargarReporteAsistencia;
 document.getElementById('btnDescargar').addEventListener('click', descargarReporteAsistencia);
