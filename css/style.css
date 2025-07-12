@@ -690,3 +690,17 @@ main.container {
   color: #58a6ff;
   text-align: center;
 }
+
+/* Colores distintivos para el estado de membresía */
+.state-vencida {
+  color: #e53e3e;      /* rojo GitHub/crimson */
+  font-weight: bold;
+}
+.state-proxima {
+  color: #dd6b20;      /* naranja / yellow-600 */
+  font-weight: bold;
+}
+.state-activo {
+  color: #2ea043;      /* verde GitHub */
+  font-weight: bold;
+}
