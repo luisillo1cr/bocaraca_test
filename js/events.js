@@ -2,8 +2,13 @@
 
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { collection, onSnapshot, orderBy, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import {
+  collection,
+  getDocs,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+// Referencias DOM
 const grid     = document.getElementById('eventsGrid');
 const modal    = document.getElementById('eventModal');
 const titleEl  = document.getElementById('modalTitle');
@@ -13,64 +18,75 @@ const descEl   = document.getElementById('modalDesc');
 const linkEl   = document.getElementById('modalLink');
 const closeBtn = document.getElementById('modalClose');
 
+/**
+ * Renderiza un array de DocumentSnapshots en la grid
+ */
+function renderEvents(docs) {
+  grid.innerHTML = '';
+  docs.forEach(docSnap => {
+    const e = docSnap.data();
+    // Detecta ambos estilos de campo
+    const imgSrc   = e.imageURL    ?? e.imageUrl    ?? '';
+    const start    = e.startDate   ?? e.from        ?? '';
+    const end      = e.endDate     ?? e.to          ?? '';
+    const ticket   = e.ticketURL   ?? e.ticketsUrl  ?? '';
+    const title    = e.title       ?? '';
+    const desc     = e.description ?? '';
+
+    const card = document.createElement('div');
+    card.className = 'event-card';
+    card.innerHTML = `
+      <img src="${imgSrc}" alt="${title}">
+      <div class="info">
+        <h3>${title}</h3>
+        <p>${start} → ${end}</p>
+      </div>
+    `;
+    card.addEventListener('click', () => openModal({ title, imgSrc, start, end, desc, ticket }));
+    grid.appendChild(card);
+  });
+}
+
+// Al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-  // 1) Esperamos auth
   onAuthStateChanged(auth, async user => {
-    console.log('📡 Auth user en events.js →', user);
-
     if (!user) {
-      // no autenticado, redirige
-      window.location.href = './index.html';
-      return;
+      // No autenticado, redirige al login
+      return window.location.href = './index.html';
     }
 
-    // 2) Comprobación rápida una sola vez
+    // 1) Carga puntual
     try {
-      const allSnap = await getDocs(collection(db, 'events'));
-      console.log('📑 getDocs /events → IDs:', allSnap.docs.map(d => d.id));
+      const coll     = collection(db, 'events');
+      const snap     = await getDocs(coll);
+      console.log('✅ getDocs("/events") → IDs:', snap.docs.map(d => d.id));
+      renderEvents(snap.docs);
     } catch (err) {
-      console.error('❌ getDocs /events error:', err);
+      console.error('❌ Error con getDocs("/events"):', err);
     }
 
-    // 3) Listener en tiempo real
-    const q = query(
-      collection(db, 'events'),
-      orderBy('startDate', 'asc')
-    );
-
-    onSnapshot(q, snap => {
-      console.log('📂 onSnapshot /events docs:', snap.docs.map(d => d.id));
-      grid.innerHTML = '';
-      snap.docs.forEach(docSnap => {
-        const e = docSnap.data();
-        const card = document.createElement('div');
-        card.className = 'event-card';
-        card.innerHTML = `
-          <img src="${e.imageURL}" alt="${e.title}">
-          <div class="info">
-            <h3>${e.title}</h3>
-            <p>${e.startDate} → ${e.endDate}</p>
-          </div>
-        `;
-        card.addEventListener('click', () => openModal(e));
-        grid.appendChild(card);
-      });
+    // 2) Escucha en tiempo real
+    const collRT = collection(db, 'events');
+    onSnapshot(collRT, snap => {
+      console.log('🔄 onSnapshot("/events") → IDs:', snap.docs.map(d => d.id));
+      renderEvents(snap.docs);
     }, err => {
-      console.error('❌ onSnapshot /events error:', err);
+      console.error('❌ onSnapshot("/events") error:', err);
     });
   });
 });
 
-// 4) Modal detail
-function openModal(e) {
-  titleEl.textContent = e.title;
-  imgEl.src           = e.imageURL;
-  datesEl.textContent = `${e.startDate} → ${e.endDate}`;
-  descEl.textContent  = e.description;
-  linkEl.href         = e.ticketURL;
+// Abre el modal con la info del evento
+function openModal({ title, imgSrc, start, end, desc, ticket }) {
+  titleEl.textContent   = title;
+  imgEl.src             = imgSrc;
+  datesEl.textContent   = `${start} → ${end}`;
+  descEl.textContent    = desc;
+  linkEl.href           = ticket;
   modal.classList.add('active');
 }
 
+// Cierra el modal
 closeBtn.addEventListener('click', () => {
   modal.classList.remove('active');
 });
