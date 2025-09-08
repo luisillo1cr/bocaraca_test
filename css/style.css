@@ -1513,3 +1513,64 @@ main.container {
   #tab-login #loginForm { max-width: 100%; }
   #tab-login #loginForm button[type="submit"] { max-width: 100%; }
 }
+
+/* ===== Perfil ===== */
+.profile-card{
+  width: min(96vw, 720px);
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.profile-header{
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.profile-header .avatar{
+  width: 64px; height: 64px; border-radius: 50%;
+  background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+  display:grid; place-items:center; font-weight:800; font-size:1.1rem;
+}
+
+.ph-info h2{ margin: 0 0 6px; }
+.ph-email{ color:#8b949e; font-size:.95rem; }
+.ph-badges{ display:flex; gap:8px; flex-wrap:wrap; }
+.ph-top{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+/* Chips estado/plan (verde/amarillo/rojo) */
+.tag{
+  display:inline-block; padding:.2rem .6rem; border-radius:999px;
+  font-size:.82rem; font-weight:600; border:1px solid transparent;
+}
+.tag.info{    background:#0d2b4d; color:#cfe9ff; border-color:#1f4b7b; }
+.tag.success{ background:#1f6f2a; color:#d4f1d8; border-color:#2c8a3a; } /* Activa (verde) */
+.tag.warn{    background:#5b3a06; color:#ffe1b2; border-color:#8a5b0b; } /* Por Vencer (amarillo) */
+.tag.error{   background:#5a1f23; color:#ffd6da; border-color:#a23a42; } /* Vencida (rojo) */
+
+/* Grid de datos */
+.profile-grid{
+  margin-top: 8px;
+  display:grid; grid-template-columns: 1fr 2fr; gap:8px 14px;
+}
+.profile-grid .label{ color:#8b949e; }
+.profile-grid .value{ color:#c9d1d9; word-break:break-word; }
+
+/* Form edición */
+.edit-form{ margin: 8px 0 10px; background:#0f141a; border:1px solid #30363d; border-radius:10px; padding:10px; }
+.ef-grid{ display:grid; grid-template-columns: 120px 1fr; gap:10px 12px; align-items:center; }
+.ef-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+
+.btn.small{ padding:6px 10px; font-size:.85rem; border-radius:8px; }
+.btn.outline{ background:transparent; color:#58a6ff; border:1px solid #58a6ff; }
+.btn.outline:hover{ background:rgba(88,166,255,.12); }
+
+/* Mejoras móviles */
+@media (max-width: 560px){
+  .profile-card{ width: min(96vw, 96vw); }
+  .profile-header .avatar{ width:56px; height:56px; font-size:1rem; }
+  .profile-grid{ grid-template-columns: 1fr; }
+  .ef-grid{ grid-template-columns: 1fr; }
+}
