@@ -27,7 +27,7 @@ function getTodayCRParts() {
 function isDateInCurrentMonthCR(dateStr) {
   const { year: cy, month: cm } = getTodayCRParts();
   const [y, m] = dateStr.split('-').map(Number);
-  return y === cy && m === cm;
+  y === cy && m === cm;
 }
 function isDateNotPastCR(dateStr) {
   const { year: cy, month: cm, day: cd } = getTodayCRParts();
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       },
       eventContent() {
-        return { html: '<div style="font-size:30px;color:green;text-align:center;">✅</div>' };
+        return { html: '<div style="font-size:20px;color:green;text-align:center;">✅</div>' };
       },
       dateClick(info) {
         const dateStr = info.dateStr;
@@ -329,3 +329,4 @@ if (logoutBtn) {
     }
   });
 }
+
