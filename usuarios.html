@@ -37,8 +37,29 @@
     <main class="card">
         <img src="./assets/android-chrome-512x512.png" alt="Logo" class="logo-img">
         <h1>Usuarios Registrados</h1>
+        
+        <!-- Barra de filtros -->
+        <div class="users-filters">
+          <label>
+            Estado
+            <select id="filterState" class="dark-select">
+              <option value="all">Todos</option>
+              <option value="auth">Autorizados</option>
+              <option value="noauth">No autorizados</option>
+            </select>
+          </label>
+
+          <label>
+            Orden
+            <select id="sortBy" class="dark-select">
+              <option value="az">Nombre A → Z</option>
+              <option value="za">Nombre Z → A</option>
+            </select>
+          </label>
+        </div>
+
         <div class="table-container">
-        <table id="usuarios-table">
+        <table id="usuarios-table" class="asistencia-table">
           <thead>
               <tr>
                 <th>Nombre</th>

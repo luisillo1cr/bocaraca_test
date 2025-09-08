@@ -7,6 +7,7 @@
 
     <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
     <!-- Tu CSS global -->
   <link rel="stylesheet" href="./css/style.css" />
   <link rel="icon" href="./assets/favicon-32x32.png" type="image/x-icon"/>
@@ -40,22 +41,29 @@
   </nav>
 
   <div class="calendar-wrapper">
-    <main class="card">
-      <img src="./assets/android-chrome-512x512.png" class="logo-img" alt="Logo">
-      <h1>Control de Mensualidades</h1>
+  <main id="mensualidades" class="card">
+  <img src="./assets/android-chrome-512x512.png" class="logo-img" alt="Logo">
+  <h1>Control de Mensualidades</h1>
 
-      <div class="table-container">
-        <table id="mensualidades-table" class="asistencia-table">
-          <thead>
-            <tr>
-              <th>Nombre</th><th>Correo</th><th>Autorizado</th>
-              <th>Expira</th><th>Estado</th><th>Mes a pagar</th><th>Acción</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </main>
+  <!-- tabla (desktop) / tarjetas (móvil) -->
+  <div class="table-container">
+    <table id="mensualidades-table" class="asistencia-table">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Correo</th>
+          <th>Autorizado</th>
+          <th>Expira</th>
+          <th>Estado</th>
+          <th>Mes a pagar</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
   </div>
 
   <footer>
@@ -63,5 +71,9 @@
   </footer>
 
   <script type="module" src="./js/control-mensualidades.js"></script>
+
+  <!--  Bootstrap JS (bundle con Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>

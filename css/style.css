@@ -809,6 +809,14 @@ main.container {
   border-radius: 8px;
 }
 
+/* Toolbard mensualidades */
+#mensuToolbar .form-select {
+  background-color:#21262d !important;
+  color:#c9d1d9 !important;
+  border-color:#30363d !important;
+}
+
+
 /* ─── Responsive para eventos en móvil ───────────────────────────── */
 @media (max-width: 767px) {
   .events-grid {
@@ -1068,7 +1076,7 @@ main.container {
 /* Barra de scroll más discreta (opcional) */
 .table-container::-webkit-scrollbar{ height: 8px; }
 .table-container::-webkit-scrollbar-thumb{
-  background: #30363d; border-radius: 8px;
+  background: #ffffff; border-radius: 8px;
 }
 
 /* Mensualidades: 7 columnas → pedimos un ancho mínimo cómodo */
@@ -1109,7 +1117,7 @@ main.container {
 
 /* Inputs/controles dentro de celdas: compactos en móvil */
 #mensualidades-table input[type="month"]{
-  background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+  background:#21262d; border:1px solid #37679e; color:#c9d1d9;
   border-radius:6px; padding:6px 8px; width: 130px;
 }
 @media (max-width: 480px){
@@ -1139,4 +1147,369 @@ main.container {
   width: 100%;
   max-width: 1100px;
   box-sizing: border-box;
+}
+
+/* ───────────────── Mensualidades: barra de orden ───────────────── */
+#mensualidades .subs-controls{
+  display:flex; 
+  align-items:center; 
+  gap:.5rem;
+  margin: .25rem 0 .5rem;
+}
+#mensualidades .subs-controls label{ color:#eeeeee; }
+#mensualidades .subs-controls select{
+  background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+  border-radius:8px; padding:.4rem .6rem;
+}
+
+/* El contenedor-card principal */
+#mensualidades.card{ width:min(96vw,1100px); margin:auto; }
+
+/* Tabla normal en desktop; tarjetas elegantes en móvil */
+@media (max-width: 768px){
+  #mensualidades-table thead{ display:none; }
+  #mensualidades-table, #mensualidades-table tbody,
+  #mensualidades-table tr, #mensualidades-table td{
+    display:block; width:100%;
+  }
+
+  /* Tarjeta */
+  #mensualidades-table tr{
+    margin-bottom: 14px;
+    background:#161b22;
+    border:1px solid #30363d;
+    border-radius:14px;
+    padding:12px 12px 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  }
+
+  /* Celdas en dos columnas: etiqueta + valor/control */
+  #mensualidades-table td{
+    border:0;
+    padding:8px 0;
+    display:grid;
+    grid-template-columns: 44% 56%;
+    align-items:center;
+    gap:10px;
+  }
+  #mensualidades-table td::before{
+    color:#8b949e;
+    font-weight:600;
+    content: attr(data-label);
+  }
+
+  /* Etiquetas automáticamente por orden de columna */
+  #mensualidades-table td:nth-child(1){ --label:"Nombre"; }
+  #mensualidades-table td:nth-child(2){ --label:"Correo"; }
+  #mensualidades-table td:nth-child(3){ --label:"Autorizado"; }
+  #mensualidades-table td:nth-child(4){ --label:"Expira"; }
+  #mensualidades-table td:nth-child(5){ --label:"Estado"; }
+  #mensualidades-table td:nth-child(6){ --label:"Mes a pagar"; }
+  #mensualidades-table td:nth-child(7){ --label:"Acción"; }
+
+  /* Truco: inyectamos la etiqueta en data-label si no la has puesto en JS */
+  #mensualidades-table td:not([data-label])::before{
+    content: var(--label);
+  }
+
+  /* Controles compactos */
+  #mensualidades-table input[type="month"],
+  #mensualidades-table select{
+    width:100%;
+    background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+    border-radius:8px; padding:.45rem .6rem;
+  }
+  #mensualidades-table .switch{ width:50px; height:28px; }
+  #mensualidades-table .slider:before{ width:22px; height:22px; }
+
+  /* Celda de Acción: botón corto y a la derecha */
+  #mensualidades-table td:last-child{
+    display:flex; justify-content:flex-end; align-items:center;
+  }
+  #mensualidades-table td:last-child .btn{
+    padding:.5rem .9rem;
+    border-radius:10px;
+    width:auto;              /* deja de ocupar todo el ancho */
+    min-width: 120px;
+  }
+}
+
+/* Desktop: un poco más compacto y con scroll horizontal si hace falta */
+.table-container{
+  width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+  border-radius:12px; margin-top:.5rem;
+}
+.table-container::-webkit-scrollbar{ height:8px; }
+.table-container::-webkit-scrollbar-thumb{ background:#30363d; border-radius:8px; }
+
+#mensualidades-table{
+  width:100%; table-layout:fixed; border-collapse:collapse;
+  min-width: 920px;
+}
+#mensualidades-table th, #mensualidades-table td{
+  padding:10px; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;
+  border-bottom:1px solid #ffffff;
+}
+
+/* Título y logo un poquito más fluidos */
+#mensualidades .logo-img{
+  width: clamp(70px, 18vw, 110px); height: clamp(70px, 18vw, 110px);
+}
+#mensualidades h1{
+  font-size: clamp(1.4rem, 5.5vw, 2.2rem);
+  text-align:center; margin:.25rem 0 .5rem;
+}
+
+/* ====== Bootstrap modal “bonito” (look de tu captura) ====== */
+.appmodal { border: none; border-radius: 1rem; }
+.appmodal .modal-header { border-bottom: none; color:#fff; border-radius: 1rem 1rem 0 0; }
+.appmodal .btn-close { filter: brightness(0) invert(1); opacity:.8; }
+.appmodal .btn-close:hover { opacity:1; }
+.appmodal .modal-body { background:#fff; color:#495057; }
+.appmodal .modal-footer { border-top: none; background:#fff; }
+
+.gradient-danger{ background: linear-gradient(90deg,#ff6b6b,#ff8787); }
+.gradient-success{ background: linear-gradient(90deg,#22c55e,#4ade80); }
+.gradient-info{ background: linear-gradient(90deg,#3b82f6,#60a5fa); }
+.gradient-warning{ background: linear-gradient(90deg,#f59e0b,#fbbf24); }
+
+.appmodal .btn { padding:.6rem 1.5rem; border-radius:.5rem; font-weight:500; }
+
+/* ====== Página de Mensualidades: texto claro y controles dark ====== */
+.page-mensualidades .card,
+.page-mensualidades table,
+.page-mensualidades label,
+.page-mensualidades h1,
+.page-mensualidades th,
+.page-mensualidades td {
+  color: #e6edf3 !important;   /* blanco GitHub */
+}
+
+.page-mensualidades input,
+.page-mensualidades select,
+.page-mensualidades button.btn,
+.page-mensualidades .form-select {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+}
+
+.page-mensualidades .form-select:focus,
+.page-mensualidades input:focus {
+  outline: none;
+  box-shadow: 0 0 0 .2rem rgba(35,134,54,.25);
+  border-color: #238636;
+}
+
+/* Botón Guardar de ancho contenido en móvil */
+@media (max-width: 768px){
+  #mensualidades-table .btnPay.btn{
+    width: 100%;
+    max-width: 360px;
+  }
+}
+
+/* Filtros arriba (si los usas) */
+#mensaFilterBar .form-select {
+  min-width: 150px;
+}
+
+/* ======= Filtros (Usuarios) centrados bajo el título ======= */
+.users-filters{
+  width: 100%;
+  display: flex;
+  justify-content: center;     /* <— centra horizontalmente */
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: .5rem 0 1rem;
+}
+
+.users-filters label{
+  color: #e6edf3;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;      /* en móviles: etiqueta arriba, select abajo */
+  align-items: center;
+  gap: .35rem;
+  text-align: center;
+  min-width: 160px;
+}
+
+@media (min-width: 768px){
+  .users-filters label{
+    flex-direction: row;       /* en desktop: etiqueta y select en una fila */
+    text-align: left;
+  }
+}
+
+/* Select oscuro que ya veníamos usando */
+.dark-select{
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 6px 10px;
+  outline: none;
+}
+.dark-select:focus{
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 2px rgba(88,166,255,.15);
+}
+
+/* === Login con pestañas (no afecta otras vistas) =================== */
+.auth-card{
+  /* tu .card ya define fondo, bordes y sombra; aquí solo anchura */
+  max-width: 520px;       /* como tu login original */
+  margin: 0 auto;         /* centrado */
+  width: 100%;
+}
+
+.auth-tabs{
+  display: flex;
+  gap: .5rem;
+  border-bottom: 1px solid #30363d;
+  margin: -4px -4px 12px -4px; /* cuadra visual con padding interno de .card */
+  padding: 0 4px 8px 4px;
+}
+
+.auth-tab{
+  background: transparent;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: .45rem .9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.auth-tab.active{
+  background: #21262d;
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.auth-panel{ display: none; }
+.auth-panel.active{ display: block; }
+
+/* el formulario mantiene tu look original */
+.auth-panel form h2{
+  margin-top: 0;
+  margin-bottom: .75rem;
+}
+.auth-panel form button[type="submit"]{
+  width: 100%;
+}
+
+/* ====== Tarjetas de precios, compactas y elegantes ====== */
+.pricing-grid{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .75rem;
+}
+
+.price-card{
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.price-head{
+  padding: .75rem 1rem;
+  text-align: center;
+  color: #fff;
+}
+.head-blue { background: linear-gradient(90deg,#2563eb,#3b82f6); }
+.head-green{ background: linear-gradient(90deg,#15803d,#22c55e); }
+
+.price-title{ margin: 0; font-weight: 700; }
+
+.price-body{ padding: .9rem 1rem; }
+.price-amount{
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin-bottom: .25rem;
+}
+.price-amount small{ font-size: .9rem; color: #8b949e; }
+
+.price-list{
+  list-style: none; padding: 0; margin: .5rem 0 1rem;
+  color: #c9d1d9; line-height: 1.35;
+}
+.price-list .muted{ color:#8b949e; }
+
+.price-cta{ text-align:center; }
+.pill{
+  display:inline-block; padding:.25rem .6rem; border-radius:999px;
+  font-size:.8rem; border:1px solid #30363d; color:#8b949e;
+}
+.pill.success{ border-color:#2ea043; color:#2ea043; }
+
+/* en pantallas anchas (pero sigue dentro de la card) */
+@media (min-width: 720px){
+  .pricing-grid{ grid-template-columns: 1fr 1fr; }
+}
+
+/* ====== LOGIN (pestaña "Ingreso") – Overrides seguros ====== */
+#tab-login .card {
+  max-width: 640px;                  /* evita que se estire en pantallas grandes */
+  margin: 0 auto;
+}
+
+/* Contenedor interior para centrar el formulario */
+#tab-login #loginForm {
+  width: 100%;
+  max-width: 520px;                  /* ancho cómodo del formulario */
+  margin: 0 auto;
+}
+
+/* Apilar etiquetas y campos (nada en línea) */
+#tab-login #loginForm label {
+  display: block;
+  margin: 10px 0 6px;
+  color: #8b949e;                    /* igual que el resto del sitio */
+  font-size: 14px;
+}
+
+#tab-login #loginForm input[type="email"],
+#tab-login #loginForm input[type="password"] {
+  width: 100%;
+  display: block;
+  background-color: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* Botón: centrado, altura cómoda y sin ocupar TODO el ancho en desktop */
+#tab-login #loginForm button[type="submit"] {
+  display: block;
+  width: 100%;
+  max-width: 360px;                  /* reduce el ancho del botón en desktop */
+  margin: 14px auto 8px;             /* centrado */
+  padding: 10px 16px;                /* altura justa */
+  background-color: #238636;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+#tab-login #loginForm button[type="submit"]:hover {
+  background-color: #2ea043;
+}
+
+/* Pie del formulario */
+#tab-login #loginForm p {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+/* Responsive: en móviles el botón vuelve a 100% y todo ocupa bien */
+@media (max-width: 480px) {
+  #tab-login #loginForm { max-width: 100%; }
+  #tab-login #loginForm button[type="submit"] { max-width: 100%; }
 }

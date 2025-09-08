@@ -115,12 +115,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3) Inicializar FullCalendar
     calendar = new FullCalendar.Calendar(calEl, {
       locale: 'es',
-      initialView: 'dayGridMonth',
+      initialView: '',
       timeZone: 'America/Costa_Rica',
       headerToolbar: {
-        left: 'prev,next today',
+        left: '',
         center: 'title',
-        right: 'dayGridMonth,dayGridWeek,dayGridDay'
+        right: ''
       },
       events(info, success, failure) {
         const q = query(
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       },
       eventContent() {
-        return { html: '<div style="font-size:20px;color:green;text-align:center;">✔️</div>' };
+        return { html: '<div style="font-size:30px;color:green;text-align:center;">✅</div>' };
       },
       dateClick(info) {
         const dateStr = info.dateStr;
