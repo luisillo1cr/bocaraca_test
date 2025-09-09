@@ -57,9 +57,16 @@
         <div class="ef-grid">
           <label for="efNombre">Nombre</label>
           <input id="efNombre" type="text" required autocomplete="off" />
+
           <label for="efApellidos">Apellidos</label>
           <input id="efApellidos" type="text" autocomplete="off" />
+
+          <!-- NUEVO: Cédula -->
+          <label for="efCedula">Cédula (opcional)</label>
+          <input id="efCedula" type="text" inputmode="numeric" autocomplete="off"
+                 placeholder="Solo dígitos (8–20)" />
         </div>
+
         <div class="ef-actions">
           <button type="submit" class="btn success small">Guardar</button>
           <button type="button" id="efCancel" class="btn error small">Cancelar</button>
@@ -68,12 +75,13 @@
 
       <!-- Datos -->
       <div class="profile-grid">
-        <div class="label">Nombre</div>     <div class="value" id="pfNombre">—</div>
-        <div class="label">Apellidos</div>  <div class="value" id="pfApellidos">—</div>
-        <div class="label">Correo</div>     <div class="value" id="pfCorreo">—</div>
-        <div class="label">Membresía</div>  <div class="value" id="pfMembresia">—</div>
-        <div class="label">Estado</div>     <div class="value" id="pfEstado">—</div>
-        <div class="label">Expira</div>     <div class="value" id="pfExpira">—</div>
+        <div class="label">Nombre</div>      <div class="value" id="pfNombre">—</div>
+        <div class="label">Apellidos</div>   <div class="value" id="pfApellidos">—</div>
+        <div class="label">Correo</div>      <div class="value" id="pfCorreo">—</div>
+        <div class="label">Cédula</div>      <div class="value" id="pfCedula">—</div> <!-- NUEVO -->
+        <div class="label">Membresía</div>   <div class="value" id="pfMembresia">—</div>
+        <div class="label">Estado</div>      <div class="value" id="pfEstado">—</div>
+        <div class="label">Expira</div>      <div class="value" id="pfExpira">—</div>
       </div>
     </section>
   </main>

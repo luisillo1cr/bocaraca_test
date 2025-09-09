@@ -2,7 +2,7 @@
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged, updateProfile }
   from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, getDoc, updateDoc, setDoc }
+import { doc, getDoc, setDoc }
   from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
@@ -38,7 +38,7 @@ function computeState(user) {
   if (!user?.autorizado) return { label:'Vencida', cls:'error' };
   const left = daysUntil(user?.expiryDate);
   if (left < 0)  return { label:'Vencida', cls:'error' };
-  if (left <= 5) return { label:'Por Vencer', cls:'warn' };
+  if (left <= 5) return { label:'Por Vencer', cls:'warn' }; // tus estados: Activa / Vencida / Por Vencer
   return { label:'Activa', cls:'success' };
 }
 function initialsFrom(name='', last='') {
@@ -54,6 +54,13 @@ function formatDate(dateStr) {
       { year:'numeric', month:'long', day:'2-digit' });
   } catch { return dateStr; }
 }
+// Normaliza cédula a solo dígitos; válida 8–20 (coincide con reglas)
+function normalizeCedula(raw='') {
+  const digits = String(raw).replace(/\D+/g,'');
+  if (!digits) return ''; // opcional
+  if (digits.length < 8 || digits.length > 20) return null; // inválida
+  return digits;
+}
 
 // Referencias UI
 const avatarEl   = document.getElementById('pfAvatar');
@@ -62,20 +69,21 @@ const emailChip  = document.getElementById('pfEmail');
 const planChip   = document.getElementById('pfPlan');
 const statusChip = document.getElementById('pfStatus');
 
-const pfNombre   = document.getElementById('pfNombre');
-const pfApellidos= document.getElementById('pfApellidos');
-const pfCorreo   = document.getElementById('pfCorreo');
-const pfMembresia= document.getElementById('pfMembresia');
-const pfEstado   = document.getElementById('pfEstado');
-const pfExpira   = document.getElementById('pfExpira');
+const pfNombre    = document.getElementById('pfNombre');
+const pfApellidos = document.getElementById('pfApellidos');
+const pfCorreo    = document.getElementById('pfCorreo');
+const pfCedula    = document.getElementById('pfCedula');   // NUEVO
+const pfMembresia = document.getElementById('pfMembresia');
+const pfEstado    = document.getElementById('pfEstado');
+const pfExpira    = document.getElementById('pfExpira');
 
-const editBtn    = document.getElementById('pfEdit');
-const editForm   = document.getElementById('editForm');
-const efNombre   = document.getElementById('efNombre');
-const efApellidos= document.getElementById('efApellidos');
-const efCancel   = document.getElementById('efCancel');
+const editBtn     = document.getElementById('pfEdit');
+const editForm    = document.getElementById('editForm');
+const efNombre    = document.getElementById('efNombre');
+const efApellidos = document.getElementById('efApellidos');
+const efCedula    = document.getElementById('efCedula');   // NUEVO
+const efCancel    = document.getElementById('efCancel');
 
-let CURRENT_DOC = null; // datos cargados
 let CURRENT_UID = null;
 
 // Carga de perfil
@@ -86,7 +94,6 @@ onAuthStateChanged(auth, async (user) => {
   const ref = doc(db, 'users', CURRENT_UID);
   const snap = await getDoc(ref);
   const u = snap.exists() ? snap.data() : {};
-  CURRENT_DOC = u;
 
   // Datos base
   const nombre    = u.nombre || user.displayName?.split(' ')?.[0] || '—';
@@ -94,6 +101,7 @@ onAuthStateChanged(auth, async (user) => {
   const correo    = u.correo || user.email || '—';
   const plan      = u.membresia || u.membershipType || 'General';
   const expiry    = u.expiryDate || '—';
+  const cedula    = u.cedula || '—';
   const state     = computeState(u);
 
   // Header
@@ -101,8 +109,8 @@ onAuthStateChanged(auth, async (user) => {
   displayEl.textContent = `${nombre} ${apellidos}`.trim();
   emailChip.textContent = correo;
 
-  planChip.textContent  = plan;
-  planChip.className    = 'tag info';
+  planChip.textContent   = plan;
+  planChip.className     = 'tag info';
 
   statusChip.textContent = state.label;
   statusChip.className   = `tag ${state.cls}`;
@@ -111,6 +119,7 @@ onAuthStateChanged(auth, async (user) => {
   pfNombre.textContent     = nombre;
   pfApellidos.textContent  = apellidos;
   pfCorreo.textContent     = correo;
+  pfCedula.textContent     = cedula;           // NUEVO
   pfMembresia.textContent  = plan;
   pfEstado.textContent     = state.label;
   pfExpira.textContent     = formatDate(expiry);
@@ -118,6 +127,7 @@ onAuthStateChanged(auth, async (user) => {
   // Prefill edición
   efNombre.value    = (nombre === '—') ? '' : nombre;
   efApellidos.value = (apellidos === '—') ? '' : apellidos;
+  efCedula.value    = (cedula === '—') ? '' : cedula; // NUEVO
 });
 
 // Toggle edición
@@ -132,25 +142,42 @@ editForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const nombre    = efNombre.value.trim();
   const apellidos = efApellidos.value.trim();
+  const rawCedula = efCedula.value.trim();
 
   if (!nombre) { showAlert('El nombre es obligatorio','error'); return; }
+
+  // Normaliza/valida cédula (opcional)
+  let cedulaToSave = '';
+  if (rawCedula) {
+    const norm = normalizeCedula(rawCedula);
+    if (norm === null) {
+      showAlert('La cédula debe tener entre 8 y 20 dígitos (solo números).', 'error');
+      return;
+    }
+    cedulaToSave = norm;
+  }
 
   try {
     const ref = doc(db, 'users', CURRENT_UID);
 
-    // Crea/actualiza apellidos automáticamente si no existe
-    await setDoc(ref, { nombre, apellidos }, { merge: true });
+    // Crea/actualiza nombre, apellidos y cédula
+    const payload = { nombre, apellidos };
+    if (cedulaToSave) payload.cedula = cedulaToSave;
+    else payload.cedula = ''; // si quieres permitir borrado, mantenlo; si no, omite esta línea
 
-    // Actualiza displayName de Auth (opcional pero útil)
+    await setDoc(ref, payload, { merge: true });
+
+    // Actualiza displayName de Auth (opcional)
     if (auth.currentUser) {
       await updateProfile(auth.currentUser, { displayName: `${nombre} ${apellidos}`.trim() });
     }
 
     // Refleja en UI
-    avatarEl.textContent  = initialsFrom(nombre, apellidos);
-    displayEl.textContent = `${nombre} ${apellidos}`.trim();
-    pfNombre.textContent  = nombre;
+    avatarEl.textContent    = initialsFrom(nombre, apellidos);
+    displayEl.textContent   = `${nombre} ${apellidos}`.trim();
+    pfNombre.textContent    = nombre;
     pfApellidos.textContent = apellidos || '—';
+    pfCedula.textContent    = cedulaToSave || '—';
 
     showAlert('Perfil actualizado','success');
     editForm.hidden = true;
