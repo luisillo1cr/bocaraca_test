@@ -74,7 +74,7 @@ function iniciarPanelAdmin() {
 
   const calendar = new FullCalendar.Calendar(calendarEl, {
     locale: 'es',
-    initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
+    initialView: window.innerWidth < 768 ? 'dayGridMonth' : 'dayGridMonth',
     headerToolbar: {
       left: '',
       center: 'title',
@@ -178,3 +178,4 @@ function cerrarPopup() {
   const popup = document.getElementById('asistenciaPopup');
   if (popup) popup.classList.remove('active');
 }
+
