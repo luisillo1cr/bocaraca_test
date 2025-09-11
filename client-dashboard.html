@@ -44,12 +44,18 @@
     </ul>
   </nav>
 
+
   <main class="container">
     <div class="logo-container">
       <img src="./assets/android-chrome-512x512.png" alt="Logo" class="logo-img">
       <h1 class="logo-text">Calendario de Clases</h1>
       <h2 id="attendanceCodeDisplay" class="attendance-code">Cargando código de asistencia...</h2>
       <div id="local-time" class="mt-1 text-muted"></div>
+    </div>
+
+    <!-- Aviso de membresía (in-app) -->
+    <div id="mshipBanner" class="mship-banner" style="display:none;">
+      <span id="mshipText"></span>
     </div>
 
     <!-- Botón para abrir el popup de escaneo -->
@@ -86,6 +92,7 @@
 
   <div id="toast-container"></div>
 
+  <script type="module" src="./js/notifications.js"></script>
   <!-- Toasts -->
   <script type="module" src="./js/toast.js"></script>
   <!-- Lógica del cliente (reservas, mostrar código, reloj...) -->

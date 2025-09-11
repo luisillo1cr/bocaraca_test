@@ -5,20 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Control de Mensualidades</title>
 
-    <!-- Bootstrap Icons -->
+  <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-
-    <!-- Tu CSS global -->
+  <!-- Tu CSS global -->
   <link rel="stylesheet" href="./css/style.css" />
   <link rel="icon" href="./assets/favicon-32x32.png" type="image/x-icon"/>
   <script src="https://unpkg.com/lucide@latest"></script>
-
-  <!-- EmailJS SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@2.6.4/dist/email.min.js"></script>
-  <script>
-    emailjs.init("service_qr40amg");
-  </script>
-
 </head>
 <body>
   <!-- Botón hamburguesa -->
@@ -41,29 +33,50 @@
   </nav>
 
   <div class="calendar-wrapper">
-  <main id="mensualidades" class="card">
-  <img src="./assets/android-chrome-512x512.png" class="logo-img" alt="Logo">
-  <h1>Control de Mensualidades</h1>
+    <main id="mensualidades" class="card">
+      <img src="./assets/android-chrome-512x512.png" class="logo-img" alt="Logo">
+      <h1>Control de Mensualidades</h1>
 
-  <!-- tabla (desktop) / tarjetas (móvil) -->
-  <div class="table-container">
-    <table id="mensualidades-table" class="asistencia-table">
-      <thead>
-        <tr>
-          <th>Nombre</th>
-          <th>Correo</th>
-          <th>Autorizado</th>
-          <th>Expira</th>
-          <th>Estado</th>
-          <th>Mes a pagar</th>
-          <th>Acción</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-</main>
+    <!-- Barra de filtros (estilo igual a Usuarios) -->
+    <div class="users-filters" style="margin-top:.25rem;">
+      <label>
+        Estado
+        <select id="filterState" class="dark-select">
+          <option value="all">Todos</option>
+          <option value="activo">Activos</option>
+          <option value="proxima">Próxima a vencer</option>
+          <option value="vencida">Vencidos</option>
+        </select>
+      </label>
 
+      <label>
+        Orden
+        <select id="sortBy" class="dark-select">
+          <option value="az">Nombre A → Z</option>
+          <option value="za">Nombre Z → A</option>
+        </select>
+      </label>
+    </div>
+
+
+      <!-- tabla (desktop) / tarjetas (móvil) -->
+      <div class="table-container">
+        <table id="mensualidades-table" class="asistencia-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Correo</th>
+              <th>Autorizado</th>
+              <th>Expira</th>
+              <th>Estado</th>
+              <th>Mes a pagar</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </main>
   </div>
 
   <footer>
@@ -71,9 +84,7 @@
   </footer>
 
   <script type="module" src="./js/control-mensualidades.js"></script>
-
-  <!--  Bootstrap JS (bundle con Popper) -->
+  <!-- Bootstrap JS (bundle con Popper) por si lo necesitas en otras pantallas -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 </body>
 </html>

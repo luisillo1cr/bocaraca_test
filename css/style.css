@@ -1002,38 +1002,7 @@ main.container {
 }
 
 /* ── MODO TARJETA en móviles: convierte la tabla en bloques legibles ── */
-@media (max-width: 768px){
-  /* ocultar encabezados y apilar celdas */
-  #mensualidades-table thead{ display:none; }
-  #mensualidades-table,
-  #mensualidades-table tbody,
-  #mensualidades-table tr,
-  #mensualidades-table td{
-    display:block;
-    width:100%;
-  }
 
-  #mensualidades-table tr{
-    margin-bottom: 14px;
-    background:#161b22;
-    border:1px solid #30363d;
-    border-radius:12px;
-    padding:12px 12px 8px;
-  }
-
-  /* cada celda muestra su etiqueta a la izquierda */
-  #mensualidades-table td{
-    border:0;
-    padding:6px 0;
-    display:grid;
-    grid-template-columns: 46% 54%;
-    align-items:center;
-    gap:8px;
-  }
-  #mensualidades-table td::before{
-    color:#8b949e;
-    font-weight:600;
-  }
   /* Etiquetas por columna */
   #mensualidades-table td:nth-child(1)::before{ content:"Nombre"; }
   #mensualidades-table td:nth-child(2)::before{ content:"Correo"; }
@@ -1060,7 +1029,6 @@ main.container {
   /* switch más compacto en móvil */
   #mensualidades-table .switch{ width:46px; height:26px; }
   #mensualidades-table .slider:before{ width:20px; height:20px; }
-}
 
 /* ==== Tablas de administración 100% usables en móviles ==== */
 
@@ -1241,15 +1209,6 @@ main.container {
 }
 .table-container::-webkit-scrollbar{ height:8px; }
 .table-container::-webkit-scrollbar-thumb{ background:#30363d; border-radius:8px; }
-
-#mensualidades-table{
-  width:100%; table-layout:fixed; border-collapse:collapse;
-  min-width: 920px;
-}
-#mensualidades-table th, #mensualidades-table td{
-  padding:10px; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;
-  border-bottom:1px solid #ffffff;
-}
 
 /* Título y logo un poquito más fluidos */
 #mensualidades .logo-img{
@@ -1573,4 +1532,135 @@ main.container {
   .profile-header .avatar{ width:56px; height:56px; font-size:1rem; }
   .profile-grid{ grid-template-columns: 1fr; }
   .ef-grid{ grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+   FIX: Mensualidades SIEMPRE en formato tabla (también móvil)
+   - Mantiene encabezados
+   - Desactiva el modo "tarjeta" previo en @media max-width:768px
+   - Habilita scroll horizontal elegante en pantallas pequeñas
+   ============================================================ */
+
+/* Contenedor con scroll horizontal (no cambia tu marca) */
+.table-container{
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: .75rem;
+  border-radius: 12px;
+}
+
+/* Mantén la tabla con ancho mínimo para que no se aplaste */
+#mensualidades-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 920px;          /* <- ajusta si quieres más compacto */
+}
+
+/* Cabeceras pegajosas al hacer scroll horizontal/vertical */
+#mensualidades-table thead th{
+  position: sticky;
+  top: 0;
+  background: #161b22;
+  z-index: 1;
+}
+
+/* Tipografía y separación coherente */
+#mensualidades-table th,
+#mensualidades-table td{
+  padding: 8px 10px;
+  font-size: 14px;
+  color: #fdfeff;           /* Fuerza texto claro en la tabla */
+  border-bottom: 1px solid #262b33;
+  white-space: nowrap;       /* Evita cortes feos; usarás scroll horizontal */
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/* Botones y controles más compactos dentro de la tabla */
+#mensualidades-table .btn{
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  width: auto;               /* <- evita "botón a 100%" */
+}
+#mensualidades-table input[type="month"]{
+  background:#21262d;
+  border:1px solid #30363d;
+  color:#fafdff;
+  border-radius:6px;
+  padding:6px 8px;
+  width: 130px;
+}
+
+/* Switch ligeramente reducido para celdas estrechas */
+#mensualidades-table .switch{
+  transform: scale(.9);
+  transform-origin: left center;
+}
+
+/* ---------- OVERRIDE clave: anula el "modo tarjeta" móvil ---------- */
+@media (max-width: 768px){
+  /* Asegura estructura de TABLA, no bloques */
+  #mensualidades-table thead{ display: table-header-group !important; }
+  #mensualidades-table tbody{ display: table-row-group !important; }
+  #mensualidades-table tr   { display: table-row !important; }
+  #mensualidades-table td,
+  #mensualidades-table th   { display: table-cell !important; width: auto !important; }
+
+  /* Elimina etiquetas generadas por ::before en el modo tarjeta */
+  #mensualidades-table td::before{ content: none !important; }
+
+  /* Mantén el scroll horizontal en móviles */
+  .table-container{ overflow-x: auto !important; }
+}
+
+/* ─── Mensualidades: barra de filtros fija ───────────────────────────── */
+.mensu-controls{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin: 6px auto 12px;
+}
+.mensu-controls label{
+  color:#8b949e;
+  font-size:12px;
+}
+.mensu-controls select{
+  background:#21262d;
+  border:1px solid #30363d;
+  color:#c9d1d9;
+  border-radius:8px;
+  padding:8px 10px;
+  min-width: 170px;
+}
+@media (max-width:480px){
+  .mensu-controls{ gap:8px; }
+  .mensu-controls select{ min-width: 150px; }
+}
+
+/* ─── Notificaciones (campana junto al botón de escaneo) ─── */
+.notify-bell{
+  display:inline-flex;
+  align-items:center;
+  gap:.15rem;
+  position: static;         /* queda dentro del contenedor del botón de escaneo */
+  margin-right: .5rem;      /* separada del botón QR */
+}
+.notify-bell .badge{
+  display:inline-flex;
+  min-width: 10px;
+  height: 20px;
+  padding: 0 6px;
+  align-items:center;
+  justify-content:center;
+  border-radius: 999px;
+  background: #a83030;      /* rojo GitHub */
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
 }
