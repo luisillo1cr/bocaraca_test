@@ -20,6 +20,14 @@
   <link rel="stylesheet" href="./css/style.css"/>
   <link rel="icon" href="./assets/favicon-32x32.png" type="image/x-icon"/>
 
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#0d1117">
+
+  <!-- iOS “Add to Home Screen” soporte -->
+  <link rel="apple-touch-icon" href="./assets/android-chrome-512x512.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <style>
     .product-container { max-width: 900px; margin:2rem auto; padding:0 1rem; }
     .card.product-form { max-width:900px; margin:0 auto 2rem; padding:1.5rem; }
@@ -170,5 +178,15 @@
         finally { setTimeout(()=> location.href="index.html",1000); }
       });
   </script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .catch(console.error);
+      });
+    }
+  </script>
+
 </body>
 </html>
