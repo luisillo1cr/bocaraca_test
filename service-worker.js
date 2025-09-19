@@ -1,5 +1,5 @@
 /* service-worker.js */
-const SW_VERSION = 'v1.0.0';
+const SW_VERSION = 'v1.0.1';
 const APP_SHELL = [
   './',
   './index.html',
@@ -13,10 +13,7 @@ const APP_SHELL = [
   './marcar-asistencia.html',
   './reportes.html',
   './admin-events.html',
-  './admin-products.html',
   './events.html',
-  './store.html',
-  './checkout.html',
   './profile.html',
 
   /* estilos y assets */
@@ -66,13 +63,20 @@ self.addEventListener('fetch', (event) => {
   // Solo GET es cacheable
   if (req.method !== 'GET') return;
 
+// Ignora esquemas no soportados (extensiones, data:, etc.)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
   // HTML → network-first
   if (req.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       fetch(req)
         .then((res) => {
           const copy = res.clone();
-          caches.open(RUNTIME).then((c) => c.put(req, copy));
+          caches.open(RUNTIME).then((c) => {
+            try { c.put(req, copy); } catch (e) {
+              console.warn('[sw] cache.put(html) falló:', e);
+            }
+          });
           return res;
         })
         .catch(async () => {
@@ -94,7 +98,9 @@ self.addEventListener('fetch', (event) => {
 
         try {
           const res = await fetch(req, { mode: 'no-cors' }); // Storage puede ser opaque
-          cache.put(req, res.clone());
+          try { cache.put(req, res.clone()); } catch (e) {
+            console.warn('[sw] cache.put(img) falló:', e);
+          }
           // housekeeping simple: limitar a 80 imgs
           cache.keys().then((keys) => { if (keys.length > 80) cache.delete(keys[0]); });
           return res;
@@ -119,7 +125,12 @@ self.addEventListener('fetch', (event) => {
       caches.open(RUNTIME).then(async (cache) => {
         const cached = await cache.match(req);
         const network = fetch(req)
-          .then((res) => { cache.put(req, res.clone()); return res; })
+          .then((res) => {
+            try { cache.put(req, res.clone()); } catch (e) {
+              console.warn('[sw] cache.put(swr) falló:', e);
+            }
+            return res;
+          })
           .catch(() => null);
         return cached || network || fetch(req);
       })

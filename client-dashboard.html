@@ -38,20 +38,17 @@
 <body>
 
   <!-- Botón hamburguesa -->
-  <button id="toggleNav" class="hamburger-btn" aria-label="Menú">
-    <i class="bi bi-list"></i>
-  </button>
+  <button id="toggleNav" class="hamburger-btn" aria-label="Abrir menú">☰</button>
 
-  <!-- Sidebar común de cliente -->
-  <nav id="sidebar" class="sidebar">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar">
     <ul>
-      <li><a href="./client-dashboard.html"><i class="bi bi-house-fill"></i> Inicio</a></li>
-      <li><a href="./profile.html"><i class="bi bi-person-badge-fill"></i> Perfil</a></li>
-      <li><a href="./events.html"><i class="bi bi-calendar-event"></i> Eventos</a></li>
-      <li><a href="./store.html"><i class="bi bi-bag-fill"></i> Tienda</a></li>
-      <li><a href="#" id="logoutSidebar"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</a></li>
+      <li><a href="client-dashboard.html"><span>🏠</span>Inicio</a></li>
+      <li><a href="profile.html"><span>👤</span>Mi perfil</a></li>
+      <li><a href="events.html"><span>🎫</span>Eventos</a></li>
+      <li><a id="logoutSidebar" href="#"><span>🚪</span>Cerrar sesión</a></li>
     </ul>
-  </nav>
+  </aside>
 
 
   <main class="container">
