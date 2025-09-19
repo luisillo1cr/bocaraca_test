@@ -140,3 +140,10 @@ self.addEventListener('fetch', (event) => {
 
   // Otros → pasa directo (o añade más reglas si quieres)
 });
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    // Forzamos que el SW nuevo se active de inmediato
+    self.skipWaiting();
+  }
+});
