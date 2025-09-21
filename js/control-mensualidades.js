@@ -50,7 +50,7 @@ function setupSidebarToggle() {
 function setupAuth() {
   onAuthStateChanged(auth, user => {
     const ADMINS = [
-      "TWAkND9zF0UKdMzswAPkgas9zfL2",
+      "vVUIH4IYqOOJdQJknGCjYjmKwUI3",
       "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"
     ];
     if (!user || !ADMINS.includes(user.uid)) {
@@ -205,3 +205,4 @@ function renderMensualidades() {
       });
   });
 }
+
