@@ -1,4 +1,4 @@
-// ./js/client.js — Student/Professor dual render + flip + admin-like staff view + RT + loader
+// ./js/client.js — Student/Professor dual render + flip + admin-like staff view + RT + loader (+tooltip fix)
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
@@ -72,13 +72,13 @@ window.hideLoader = hideLoader;
     .toggle.on::after{ left:28px; background:#22c55e; }
 
     /* popup estilo admin (overlay) */
-    #asistenciaPopup{ position:fixed; inset:0; display:none; place-items:center; z-index:10000; background:rgba(0,0,0,.45); }
-    #asistenciaPopup.active{ display:grid; }
-    #asistenciaPopup .card{ width:min(92vw,520px); background:#0c131a; border:1px solid #22303d; border-radius:14px; padding:14px; box-shadow:0 12px 28px rgba(0,0,0,.35); }
-    #asistenciaPopup .head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
-    #asistenciaPopup .list{ display:grid; gap:8px; max-height:50vh; overflow:auto; padding-right:4px; }
-    #asistenciaPopup .item{ display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid #233140; border-radius:10px; background:#0f1720; }
-    #asistenciaPopup .close-btn{ padding:8px 12px; border-radius:10px; background:#1f2937; border:1px solid #334155; color:#e5e7eb; cursor:pointer; }
+    #attModal{ position:fixed; inset:0; display:none; place-items:center; z-index:10000; background:rgba(0,0,0,.45); }
+    #attModal.active{ display:grid; }
+    #attModal .att-card{ width:min(92vw,520px); background:#0c131a; border:1px solid #22303d; border-radius:14px; padding:14px; box-shadow:0 12px 28px rgba(0,0,0,.35); }
+    #attModal .att-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+    #attModal .att-list{ display:grid; gap:8px; max-height:50vh; overflow:auto; padding-right:4px; }
+    #attModal .att-item{ display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid #233140; border-radius:10px; background:#0f1720; }
+    #attModal .close-btn{ padding:8px 12px; border-radius:10px; background:#1f2937; border:1px solid #334155; color:#e5e7eb; cursor:pointer; }
 
     /* que los números del conteo se vean fuertes, como en admin */
     .fc-daygrid-event .fc-event-title{ font-weight:800; }
@@ -86,9 +86,21 @@ window.hideLoader = hideLoader;
   document.head.appendChild(s);
 })();
 
+/* Afinar el modal (un poco más delgado) */
+(function(){
+  if (document.getElementById('att-modal-tighter')) return;
+  const s = document.createElement('style');
+  s.id = 'att-modal-tighter';
+  s.textContent = `
+    #attModal .att-card{ width: min(92vw, 460px); }
+    #attModal .att-item{ padding: 6px 10px; }
+  `;
+  document.head.appendChild(s);
+})();
+
 /* ───── Helpers fecha/tiempo (CR) ───── */
 const CR_TZ = 'America/Costa_Rica';
-const CR_OFFSET = '-06:00'; // CR no maneja DST
+const CR_OFFSET = '-06:00'; // CR sin DST
 
 function getTodayCRParts(){
   const s = new Date().toLocaleDateString('en-CA',{ timeZone: CR_TZ });
@@ -110,12 +122,12 @@ function isDateNotPastCR(dateStr){
 function nowCRString(){
   const d = new Intl.DateTimeFormat('en-CA',{ timeZone: CR_TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
   const t = new Intl.DateTimeFormat('en-GB',{ timeZone: CR_TZ, hour:'2-digit', minute:'2-digit', hour12:false }).format(new Date());
-  return { date:d, time:t }; // "YYYY-MM-DD", "HH:MM"
+  return { date:d, time:t };
 }
-function crDateTime(dateStr, timeStr){ // Date en UTC a partir de hora local CR
+function crDateTime(dateStr, timeStr){
   return new Date(`${dateStr}T${timeStr}:00${CR_OFFSET}`);
 }
-/* ─ Reserva: se permite si (a) es futuro y (b) si es hoy, falta >= 60 min */
+/* Reserva: permitida si es futuro y, si es hoy, con ≥ 60 minutos de anticipación */
 function canBook(dateStr, timeStr){
   const {date:today, time:nowT} = nowCRString();
   const now  = crDateTime(today, nowT);
@@ -127,7 +139,7 @@ function canBook(dateStr, timeStr){
   }
   return { ok:true };
 }
-/* ─ Cancelar: solo si aún no empieza (estrictamente antes del inicio) */
+/* Cancelar: solo si aún no empieza (estrictamente antes del inicio) */
 function canCancel(dateStr, timeStr){
   const {date:today, time:nowT} = nowCRString();
   const now  = crDateTime(today, nowT);
@@ -166,22 +178,30 @@ function ensureCalendarHolders(){
   return { shell, sHold, aHold };
 }
 
-/* ───── Popup admin (inyectado) ───── */
-function ensureAdminStylePopup(){
-  if (document.getElementById('asistenciaPopup')) return;
-  const root = document.createElement('div');
-  root.id = 'asistenciaPopup';
-  root.innerHTML = `
-    <div class="card">
-      <div class="head">
-        <h3 id="fechaReserva" style="margin:0;font-weight:800;">—</h3>
-        <button id="cerrarPopupBtn" class="close-btn">Cerrar</button>
+/* ───── Popup asistencia (inyectado) ───── */
+function ensureAttendancePopup(){
+  if (document.getElementById('attModal')) return;
+  const m = document.createElement('div');
+  m.className = 'att-modal';
+  m.id = 'attModal';
+  m.innerHTML = `
+    <div class="att-card">
+      <div class="att-head">
+        <h3 id="attDate" style="margin:0;font-weight:800;">—</h3>
+        <button id="attClose" class="close-btn">Cerrar</button>
       </div>
-      <div id="listaUsuarios" class="list"></div>
-    </div>
-  `;
-  document.body.appendChild(root);
-  root.querySelector('#cerrarPopupBtn').onclick = cerrarPopup;
+      <div id="attList" class="att-list"></div>
+    </div>`;
+  document.body.appendChild(m);
+  m.querySelector('#attClose').onclick = () => {
+    m.classList.remove('active');
+    killTooltips(); // limpiar tooltips al cerrar
+  };
+}
+
+/* ─── Mata-tooltips (para evitar que queden detrás del modal) ─── */
+function killTooltips() {
+  document.querySelectorAll('.custom-tooltip').forEach(el => el.remove());
 }
 
 /* ───── Boot ───── */
@@ -235,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (hasBoth) buildModeSwitch(holders.shell);
 
     // popup estilo admin
-    ensureAdminStylePopup();
+    ensureAttendancePopup();
 
     // levantar ambos calendarios (siempre)
     buildStudentCalendar(holders.sHold);
@@ -331,25 +351,20 @@ function buildStudentCalendar(holder){
       if(!isDateInCurrentMonthCR(dateStr)){ showAlert('Solo puedes reservar en el mes actual.','error'); return; }
       if(dow!==5 && dow!==6){ showAlert('Solo viernes y sábados.','error'); return; }
 
-      // HORARIO de clase por día
       const classTime = (dow===5) ? '20:30' : '09:00';
-
-      // Nueva regla de ventana: hoy ≥ 1h antes, nunca durante/después
       const check = canBook(dateStr, classTime);
       if (!check.ok){
         if (check.reason === 'lt1h'){
-          showAlert(`Para hoy solo puedes reservar hasta 1 hora antes. Quedan ${check.minutesLeft} min.`, 'error');
+          showAlert(`Para hoy solo puedes reservar hasta 1 hora antes.`, 'error');
         } else {
           showAlert('No puedes reservar durante o después de la clase.', 'error');
         }
         return;
       }
-
       openConfirmReservationModal(dateStr, classTime);
     },
 
     eventClick(info){
-      // Bloqueo de eliminación durante/después
       const [d,t] = info.event.startStr.split('T');
       const time  = (t||'').slice(0,5);
       if (!canCancel(d, time)){
@@ -367,7 +382,7 @@ function buildStudentCalendar(holder){
 
 /* ───── Calendario: Profesor (apariencia/UX de admin.js) ───── */
 function buildStaffCalendar(holder){
-  ensureAdminStylePopup();
+  ensureAttendancePopup();
 
   if (unsubStaff){ try{unsubStaff();}catch{} unsubStaff=null; }
   if (calStaff){ try{calStaff.destroy();}catch{} calStaff=null; }
@@ -405,23 +420,28 @@ function buildStaffCalendar(holder){
       return () => unsubStaff && unsubStaff();
     },
 
-    // título numérico como en admin.js
-
-    eventClick: async info => {
-      const day = info.event.startStr;
-      const list = await getReservasPorDia(day);
-      abrirPopupAsistencia(list, day);
-    },
-
+    // Evita tooltips cuando el modal esté visible y límpialos al hacer click
     eventMouseEnter: info => {
+      const modalActive = document.getElementById('attModal')?.classList.contains('active');
+      if (modalActive) return;
+
       const tip = document.createElement('div');
       tip.className = 'custom-tooltip';
       tip.style.cssText = 'position:fixed; z-index:10001; background:#0b2540; color:#b4d7ff; border:1px solid #1e3a5f; padding:6px 8px; border-radius:8px; pointer-events:none;';
       tip.innerHTML = `<strong>Usuarios:</strong><br>${(info.event.extendedProps.names||[]).join('<br>')}`;
       document.body.appendChild(tip);
       const move = e => { tip.style.left = `${e.pageX+10}px`; tip.style.top = `${e.pageY+10}px`; };
+      const cleanup = () => tip.remove();
       info.el.addEventListener('mousemove', move);
-      info.el.addEventListener('mouseleave', () => tip.remove());
+      info.el.addEventListener('mouseleave', cleanup);
+      info.el.addEventListener('click', cleanup);
+    },
+
+    eventClick: async info => {
+      killTooltips(); // limpiar por si quedó alguno
+      const day = info.event.startStr;
+      const list = await getReservasPorDia(day);
+      openAttendancePopup(list, day);
     },
 
     dayCellClassNames(arg){ const d=arg.date.getUTCDay(); return (d!==5 && d!==6) ? ['disabled-day'] : []; }
@@ -533,7 +553,6 @@ function openDeleteReservationModal(resId, date, time){
   document.body.appendChild(m);
 
   document.getElementById('deleteBtn').onclick = async () => {
-    // Verificación de ventana para eliminar
     if (!canCancel(date, time)){
       showAlert('No puedes cancelar durante o después de la clase.', 'error');
       closeModal();
@@ -550,36 +569,32 @@ async function getReservasPorDia(day){
   const snap = await getDocs(collection(db,'asistencias',day,'usuarios'));
   return snap.docs.map(d=>({ uid:d.id, nombre:d.data().nombre, presente:d.data().presente || false }));
 }
-function abrirPopupAsistencia(list, day){
-  const popup = document.getElementById('asistenciaPopup');
-  const ul    = document.getElementById('listaUsuarios');
-  const fd    = document.getElementById('fechaReserva');
-  if (!popup || !ul || !fd) return;
-
-  ul.innerHTML = '';
-  fd.textContent = day;
-  list.forEach(u=>{
+function openAttendancePopup(list, day){
+  killTooltips(); // ← quita cualquier tooltip vivo
+  const m = document.getElementById('attModal');
+  const l = document.getElementById('attList');
+  const d = document.getElementById('attDate');
+  if (!m || !l || !d) return;
+  d.textContent = day;
+  l.innerHTML = '';
+  list.forEach(u => {
     const row = document.createElement('div');
-    row.className='item';
-    const cb = document.createElement('input');
-    cb.type='checkbox'; cb.checked = u.presente; cb.id = u.uid;
-    cb.addEventListener('change', ()=> guardarAsistencia(day, u.uid, cb.checked));
-    const span = document.createElement('span'); span.textContent = u.nombre;
-    row.append(cb, span);
-    ul.append(row);
+    row.className = 'att-item';
+    row.innerHTML = `
+      <input type="checkbox" id="att_${u.uid}" ${u.presente ? 'checked':''} />
+      <label for="att_${u.uid}" style="flex:1">${u.nombre}</label>
+    `;
+    row.querySelector('input').addEventListener('change', async (e)=>{
+      try{
+        await updateDoc(doc(db,'asistencias',day,'usuarios',u.uid), { presente: e.target.checked });
+        showAlert('Asistencia actualizada','success');
+      }catch(err){ console.error(err); showAlert('Error al guardar asistencia','error'); }
+    });
+    l.appendChild(row);
   });
-  popup.classList.add('active');
+  m.classList.add('active');
 }
-async function guardarAsistencia(day, uid, presente){
-  try{
-    await updateDoc(doc(db,'asistencias',day,'usuarios',uid), { presente });
-    showAlert('Asistencia actualizada','success');
-  }catch(err){
-    console.error(err);
-    showAlert('Error al guardar asistencia','error');
-  }
-}
-function cerrarPopup(){ const p=document.getElementById('asistenciaPopup'); if(p) p.classList.remove('active'); }
+function cerrarPopup(){ const p=document.getElementById('attModal'); if(p) p.classList.remove('active'); }
 
 /* ───── Logout rojo (si existe) ───── */
 const logoutBtn = document.getElementById('logoutBtn');

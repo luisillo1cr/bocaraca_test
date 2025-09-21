@@ -177,5 +177,4 @@ async function guardarAsistencia(day, uid, presente) {
 function cerrarPopup() {
   const popup = document.getElementById('asistenciaPopup');
   if (popup) popup.classList.remove('active');
-
 }
