@@ -1,5 +1,4 @@
 // ./js/usuarios.js
-
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { setupInactivityTimeout } from './auth-timeout.js';
@@ -9,11 +8,33 @@ import {
   where,
   updateDoc,
   doc,
-  getDocs
+  getDocs,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-// ─── Sidebar ─────────────────────────────────────────────────────────
+/* ========= Helper de rol admin  ========= */
+const FIXED_ADMINS = new Set([
+  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // ← UID maestro
+]);
+
+async function getUserRoles(uid) {
+  try {
+    const s = await getDoc(doc(db, 'users', uid));
+    return s.exists() ? (s.data().roles || []) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function requireAdmin(user) {
+  if (!user) return false;
+  if (FIXED_ADMINS.has(user.uid)) return true;
+  const roles = await getUserRoles(user.uid);
+  return roles.includes('admin');
+}
+
+/* ========= Sidebar ========= */
 function setupSidebarToggle() {
   const toggleButton = document.getElementById("toggleNav");
   const sidebar      = document.getElementById("sidebar");
@@ -25,12 +46,12 @@ function setupSidebarToggle() {
 }
 setupSidebarToggle();
 
-// ─── Estado de UI ───────────────────────────────────────────────────
-let usersCache = []; // { id, nombre, correo, autorizado, attendanceCode, ... }
+/* ========= Estado UI ========= */
+let usersCache = [];
 
-const $tbody      = () => document.querySelector("#usuarios-table tbody");
-const $filter     = () => document.getElementById("filterState");
-const $sort       = () => document.getElementById("sortBy");
+const $tbody  = () => document.querySelector("#usuarios-table tbody");
+const $filter = () => document.getElementById("filterState");
+const $sort   = () => document.getElementById("sortBy");
 
 // Normaliza para ordenar ignorando acentos y mayúsculas
 const norm = s => (s ?? '')
@@ -39,43 +60,41 @@ const norm = s => (s ?? '')
   .replace(/[\u0300-\u036f]/g,'')
   .toLowerCase();
 
-// ─── Inicio ─────────────────────────────────────────────────────────
+/* ========= Inicio ========= */
 document.addEventListener("DOMContentLoaded", () => {
   setupInactivityTimeout();
   setupSidebarToggle();
 
-  onAuthStateChanged(auth, user => {
-    const ADMIN_UIDS = [
-      "vVUIH4IYqOOJdQJknGCjYjmKwUI3",
-      "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"
-    ];
-    if (!user || !ADMIN_UIDS.includes(user.uid)) {
+  onAuthStateChanged(auth, async user => {
+    const ok = await requireAdmin(user);
+    if (!ok) {
       window.location.href = './index.html';
+      return;
     }
-  });
 
-  const logoutSidebar = document.getElementById("logoutSidebar");
-  if (logoutSidebar) {
-    logoutSidebar.addEventListener("click", async e => {
-      e.preventDefault();
-      try {
-        await signOut(auth);
-        showAlert("Has cerrado sesión", "success");
-        setTimeout(() => (window.location.href = "index.html"), 1000);
-      } catch {
-        showAlert("Error al cerrar sesión", "error");
-      }
-    });
-  }
+    // Logout (sidebar)
+    const logoutSidebar = document.getElementById("logoutSidebar");
+    if (logoutSidebar) {
+      logoutSidebar.addEventListener("click", async e => {
+        e.preventDefault();
+        try {
+          await signOut(auth);
+          showAlert("Has cerrado sesión", "success");
+          setTimeout(() => (window.location.href = "index.html"), 1000);
+        } catch {
+          showAlert("Error al cerrar sesión", "error");
+        }
+      });
+    }
 
-  // cargar y enganchar filtros
-  loadUsers().then(() => {
+    // Cargar usuarios y enganchar filtros SOLO si es admin
+    await loadUsers();
     if ($filter()) $filter().addEventListener('change', renderUsers);
     if ($sort())   $sort().addEventListener('change', renderUsers);
   });
 });
 
-// ─── Helpers de datos ───────────────────────────────────────────────
+/* ========= Helpers de datos ========= */
 function updateUserInCache(id, patch) {
   const i = usersCache.findIndex(u => u.id === id);
   if (i >= 0) usersCache[i] = { ...usersCache[i], ...patch };
@@ -93,27 +112,27 @@ async function generateUniqueCode() {
   return code;
 }
 
-// ─── Carga inicial ──────────────────────────────────────────────────
+/* ========= Carga inicial ========= */
 async function loadUsers() {
   const snap = await getDocs(collection(db, "users"));
   usersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   renderUsers();
 }
 
-// ─── Render con filtros y orden ─────────────────────────────────────
+/* ========= Render con filtros y orden ========= */
 function renderUsers() {
   const tbody = $tbody();
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  const state = $filter() ? $filter().value : 'all'; // all | auth | noauth
-  const order = $sort() ? $sort().value   : 'az';   // az  | za
+  const state = $filter() ? $filter().value : 'all';
+  const order = $sort() ? $sort().value   : 'az';
 
   // 1) filtrar
   let list = usersCache.filter(u => {
     if (state === 'auth')   return !!u.autorizado;
     if (state === 'noauth') return !u.autorizado;
-    return true; // all
+    return true;
   });
 
   // 2) ordenar

@@ -1,5 +1,4 @@
 // ./js/admin.js
-
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
@@ -8,44 +7,56 @@ import {
   onSnapshot,
   getDocs,
   doc,
+  getDoc,        
   updateDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-  // ─── Seguridad: solo administradores ────────────────────────
-  const ADMIN_UIDS = [
-    "vVUIH4IYqOOJdQJknGCjYjmKwUI3",  // Iván
-    "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"   // Luis
-  ];
+/* ========= Helper de roles ========= */
+const FIXED_ADMINS = new Set([
+  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // ← UID maestro
+]);
 
-  onAuthStateChanged(auth, user => {
-    if (!user || !ADMIN_UIDS.includes(user.uid)) {
+async function getUserRoles(uid) {
+  try {
+    const s = await getDoc(doc(db, 'users', uid));
+    return s.exists() ? (s.data().roles || []) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function requireAdmin(user) {
+  if (!user) return false;
+  if (FIXED_ADMINS.has(user.uid)) return true;
+  const roles = await getUserRoles(user.uid);
+  return roles.includes('admin');
+}
+
+/* =================== Arranque UI base =================== */
+document.addEventListener('DOMContentLoaded', () => {
+  // Gate de seguridad por rol:
+  onAuthStateChanged(auth, async user => {
+    const ok = await requireAdmin(user);
+    if (!ok) {
       window.location.href = './index.html';
       return;
     }
     iniciarPanelAdmin();
   });
 
-  // ─── El Toggle sidebar ─────────────────────────────────────────
+  // Toggle sidebar
   const toggleBtn = document.getElementById('toggleNav');
   const sidebar   = document.getElementById('sidebar');
   if (toggleBtn && sidebar) {
     toggleBtn.addEventListener('click', () => sidebar.classList.toggle('active'));
   }
 
-  // ─── Lo de Lucide Icons ────────────────────────────────────────────
+  // Lucide (si está cargado)
   if (window.lucide) lucide.createIcons();
 });
 
-// ─── Fallback global para toggle si hiciera falta ───────────────
-const _toggle = document.getElementById('toggleNav');
-const _side   = document.getElementById('sidebar');
-if (_toggle && _side) {
-  _toggle.addEventListener('click', () => _side.classList.toggle('active'));
-}
-
-// ─── Logout desde sidebar ────────────────────────────────────────
+// Logout desde sidebar
 const logoutSidebar = document.getElementById('logoutSidebar');
 if (logoutSidebar) {
   logoutSidebar.addEventListener('click', async e => {
@@ -61,13 +72,11 @@ if (logoutSidebar) {
   });
 }
 
-// ─── Cerrar popup asistencia ────────────────────────────────────
+// Botón cerrar popup asistencia (si existe en el DOM)
 const cerrarBtn = document.getElementById('cerrarPopupBtn');
-if (cerrarBtn) {
-  cerrarBtn.addEventListener('click', cerrarPopup);
-}
+if (cerrarBtn) cerrarBtn.addEventListener('click', cerrarPopup);
 
-// ─── Inicializa FullCalendar con reservas ───────────────────────
+/* =================== FullCalendar admin =================== */
 function iniciarPanelAdmin() {
   const calendarEl = document.getElementById('calendar-admin');
   if (!calendarEl) return;
@@ -75,11 +84,8 @@ function iniciarPanelAdmin() {
   const calendar = new FullCalendar.Calendar(calendarEl, {
     locale: 'es',
     initialView: window.innerWidth < 768 ? 'dayGridMonth' : 'dayGridMonth',
-    headerToolbar: {
-      left: '',
-      center: 'title',
-      right: ''
-    },
+    headerToolbar: { left: '', center: 'title', right: '' },
+
     events(info, success, failure) {
       const q = query(collection(db, 'reservations'));
       onSnapshot(q, snap => {
@@ -96,20 +102,19 @@ function iniciarPanelAdmin() {
           allDay: true,
           extendedProps: { names }
         })));
-      }, err => {
-        console.error(err);
-        failure(err);
-      });
+      }, err => { console.error(err); failure(err); });
     },
+
     eventClick: async info => {
       const day = info.event.startStr;
       const list = await getReservasPorDia(day);
       abrirPopupAsistencia(list, day);
     },
+
     eventMouseEnter: info => {
       const tip = document.createElement('div');
       tip.className = 'custom-tooltip';
-      tip.innerHTML = `<strong>Usuarios:</strong><br>${info.event.extendedProps.names.join('<br>')}`;
+      tip.innerHTML = `<strong>Usuarios:</strong><br>${(info.event.extendedProps.names||[]).join('<br>')}`;
       document.body.appendChild(tip);
       const move = e => {
         tip.style.left = `${e.pageX+10}px`;
@@ -118,6 +123,7 @@ function iniciarPanelAdmin() {
       info.el.addEventListener('mousemove', move);
       info.el.addEventListener('mouseleave', () => tip.remove());
     },
+
     dayCellClassNames: arg => {
       const d = arg.date.getDay();
       if (d !== 5 && d !== 6) return ['disabled-day'];
@@ -127,7 +133,7 @@ function iniciarPanelAdmin() {
   calendar.render();
 }
 
-// ─── Lee reservas del día ───────────────────────────────────────
+/* =================== Asistencia =================== */
 async function getReservasPorDia(day) {
   const snap = await getDocs(collection(db, 'asistencias', day, 'usuarios'));
   return snap.docs.map(d => ({
@@ -137,7 +143,6 @@ async function getReservasPorDia(day) {
   }));
 }
 
-// ─── Muestra el popup de asistencia ──────────────────────────────
 function abrirPopupAsistencia(list, day) {
   const popup = document.getElementById('asistenciaPopup');
   const ul    = document.getElementById('listaUsuarios');
@@ -146,23 +151,27 @@ function abrirPopupAsistencia(list, day) {
 
   ul.innerHTML = '';
   fd.textContent = day;
+
   list.forEach(u => {
     const li = document.createElement('li');
     li.className = 'asistencia-item';
+
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = u.presente;
     cb.id = u.uid;
     cb.addEventListener('change', () => guardarAsistencia(day, u.uid, cb.checked));
+
     const span = document.createElement('span');
     span.textContent = u.nombre;
+
     li.append(cb, span);
     ul.append(li);
   });
+
   popup.classList.add('active');
 }
 
-// ─── Guarda la asistencia ────────────────────────────────────────
 async function guardarAsistencia(day, uid, presente) {
   try {
     await updateDoc(doc(db, 'asistencias', day, 'usuarios', uid), { presente });
@@ -173,7 +182,6 @@ async function guardarAsistencia(day, uid, presente) {
   }
 }
 
-// ─── Cierra el popup ─────────────────────────────────────────────
 function cerrarPopup() {
   const popup = document.getElementById('asistenciaPopup');
   if (popup) popup.classList.remove('active');

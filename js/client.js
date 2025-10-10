@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
       tick(); setInterval(tick,1000);
     }
 
-    // roles
+    // ── roles & montaje inteligente (sin romper nada) ──
     let roles = [];
     try {
       const u = await getDoc(doc(db,'users',user.uid));
@@ -250,20 +250,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const holders = ensureCalendarHolders();
     if (!holders) return;
 
-    // switch solo si tiene ambos
-    const hasBoth = roles.includes('student') && roles.includes('professor');
+    const isStudent = roles.includes('student');
+    const isProf    = roles.includes('professor');
+    const hasBoth   = isStudent && isProf;
+
+    // Switch solo si tiene ambos
     if (hasBoth) buildModeSwitch(holders.shell);
 
-    // popup estilo admin
-    ensureAttendancePopup();
+    // Modal de asistencia solo si puede verlo (professor)
+    if (isProf) ensureAttendancePopup();
 
-    // levantar ambos calendarios (siempre)
-    buildStudentCalendar(holders.sHold);
-    buildStaffCalendar(holders.aHold);
+    // Montar calendarios:
+    // - ambos si tiene ambos (para RT al alternar)
+    // - solo el correspondiente si tiene un rol
+    if (hasBoth || isStudent) buildStudentCalendar(holders.sHold);
+    if (hasBoth || isProf)    buildStaffCalendar(holders.aHold);
 
-    if (!hasBoth){
-      holders.sHold.classList.add('visible');
-      holders.aHold.classList.add('hidden');
+    // Visibilidad inicial
+    if (hasBoth) {
+      holders.sHold.classList.add('visible');  holders.sHold.classList.remove('hidden');
+      holders.aHold.classList.add('hidden');   holders.aHold.classList.remove('visible');
+    } else if (isProf) {
+      holders.sHold.classList.add('hidden');   holders.sHold.classList.remove('visible');
+      holders.aHold.classList.add('visible');  holders.aHold.classList.remove('hidden');
+    } else {
+      holders.sHold.classList.add('visible');  holders.sHold.classList.remove('hidden');
+      holders.aHold.classList.add('hidden');   holders.aHold.classList.remove('visible');
     }
   });
 });

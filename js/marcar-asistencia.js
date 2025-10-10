@@ -3,14 +3,32 @@ import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
   collection, query, where, getDocs,
-  doc, setDoc
+  doc, setDoc, getDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-const ADMIN_UIDS = [
-  "vVUIH4IYqOOJdQJknGCjYjmKwUI3", // ivan
-  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"  // luis
-];
+/* ========= Helper de roles ========= */
+const FIXED_ADMINS = new Set([
+  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"  // ← UID maestro
+]);
+
+async function getUserRoles(uid) {
+  try {
+    const s = await getDoc(doc(db, 'users', uid));
+    return s.exists() ? (s.data().roles || []) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function requireStaff(user) {
+  if (!user) return false;
+  if (FIXED_ADMINS.has(user.uid)) return true; // fallback
+  const roles = await getUserRoles(user.uid);
+  return roles.includes('admin') || roles.includes('professor');
+}
+
+/* ========================================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
   // Toggle sidebar
@@ -23,9 +41,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Lucide (si está)
   if (window.lucide) window.lucide.createIcons();
 
-  // Seguridad: sólo admins/profes
-  onAuthStateChanged(auth, (user) => {
-    if (!user || !ADMIN_UIDS.includes(user.uid)) {
+  // Seguridad: sólo admins/profes (por rol o UID fijo)
+  onAuthStateChanged(auth, async (user) => {
+    const ok = await requireStaff(user);
+    if (!ok) {
       window.location.href = './index.html';
       return;
     }
