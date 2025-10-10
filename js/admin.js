@@ -2,88 +2,65 @@
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
-  collection,
-  query,
-  onSnapshot,
-  getDocs,
-  doc,
-  getDoc,        
-  updateDoc
+  collection, query, onSnapshot, getDocs, doc, getDoc, updateDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-/* ========= Helper de roles ========= */
-const FIXED_ADMINS = new Set([
-  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // ← UID maestro
-]);
+/* ===== Helper roles ===== */
+const FIXED_ADMIN_UIDS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]); // maestro
 
 async function getUserRoles(uid) {
   try {
     const s = await getDoc(doc(db, 'users', uid));
     return s.exists() ? (s.data().roles || []) : [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
-
 async function requireAdmin(user) {
   if (!user) return false;
-  if (FIXED_ADMINS.has(user.uid)) return true;
+  if (FIXED_ADMIN_UIDS.has(user.uid)) return true;
   const roles = await getUserRoles(user.uid);
   return roles.includes('admin');
 }
 
-/* =================== Arranque UI base =================== */
+/* ===== Arranque UI base ===== */
 document.addEventListener('DOMContentLoaded', () => {
-  // Gate de seguridad por rol:
   onAuthStateChanged(auth, async user => {
     const ok = await requireAdmin(user);
-    if (!ok) {
-      window.location.href = './index.html';
-      return;
-    }
+    if (!ok) { window.location.href = './index.html'; return; }
     iniciarPanelAdmin();
   });
 
-  // Toggle sidebar
   const toggleBtn = document.getElementById('toggleNav');
   const sidebar   = document.getElementById('sidebar');
-  if (toggleBtn && sidebar) {
-    toggleBtn.addEventListener('click', () => sidebar.classList.toggle('active'));
-  }
+  if (toggleBtn && sidebar) toggleBtn.addEventListener('click', () => sidebar.classList.toggle('active'));
 
-  // Lucide (si está cargado)
   if (window.lucide) lucide.createIcons();
 });
 
-// Logout desde sidebar
-const logoutSidebar = document.getElementById('logoutSidebar');
-if (logoutSidebar) {
-  logoutSidebar.addEventListener('click', async e => {
-    e.preventDefault();
-    try {
-      await signOut(auth);
-      showAlert("Has cerrado sesión", 'success');
-      setTimeout(() => window.location.href = './index.html', 1500);
-    } catch (err) {
-      console.error('Error al cerrar sesión:', err);
-      showAlert('Hubo un problema al cerrar sesión.', 'error');
-    }
-  });
-}
+// Logout (sidebar)
+document.getElementById('logoutSidebar')?.addEventListener('click', async e => {
+  e.preventDefault();
+  try {
+    await signOut(auth);
+    showAlert("Has cerrado sesión", 'success');
+    setTimeout(() => window.location.href = './index.html', 1200);
+  } catch (err) {
+    console.error('Error al cerrar sesión:', err);
+    showAlert('Hubo un problema al cerrar sesión.', 'error');
+  }
+});
 
 // Botón cerrar popup asistencia (si existe en el DOM)
-const cerrarBtn = document.getElementById('cerrarPopupBtn');
-if (cerrarBtn) cerrarBtn.addEventListener('click', cerrarPopup);
+document.getElementById('cerrarPopupBtn')?.addEventListener('click', cerrarPopup);
 
-/* =================== FullCalendar admin =================== */
+/* ===== FullCalendar admin ===== */
 function iniciarPanelAdmin() {
   const calendarEl = document.getElementById('calendar-admin');
   if (!calendarEl) return;
 
   const calendar = new FullCalendar.Calendar(calendarEl, {
     locale: 'es',
-    initialView: window.innerWidth < 768 ? 'dayGridMonth' : 'dayGridMonth',
+    initialView: 'dayGridMonth',
     headerToolbar: { left: '', center: 'title', right: '' },
 
     events(info, success, failure) {
@@ -116,10 +93,7 @@ function iniciarPanelAdmin() {
       tip.className = 'custom-tooltip';
       tip.innerHTML = `<strong>Usuarios:</strong><br>${(info.event.extendedProps.names||[]).join('<br>')}`;
       document.body.appendChild(tip);
-      const move = e => {
-        tip.style.left = `${e.pageX+10}px`;
-        tip.style.top  = `${e.pageY+10}px`;
-      };
+      const move = e => { tip.style.left = `${e.pageX+10}px`; tip.style.top  = `${e.pageY+10}px`; };
       info.el.addEventListener('mousemove', move);
       info.el.addEventListener('mouseleave', () => tip.remove());
     },
@@ -133,7 +107,7 @@ function iniciarPanelAdmin() {
   calendar.render();
 }
 
-/* =================== Asistencia =================== */
+/* ===== Asistencia ===== */
 async function getReservasPorDia(day) {
   const snap = await getDocs(collection(db, 'asistencias', day, 'usuarios'));
   return snap.docs.map(d => ({

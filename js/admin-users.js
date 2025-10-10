@@ -6,17 +6,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-// Admins fijos (blindados)
-const FIXED_ADMIN_UIDS = [
-  "vVUIH4IYqOOJdQJknGCjYjmKwUI3",
-  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"
-];
+// ===== Admin fijo (blindado) =====
+const FIXED_ADMIN_UIDS = ["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]; // UID maestro
 
 let USERS = [];
 let ME = null;
 let myUid = null;
 
-// ========== Navbar: hamburguesa + logout ==========
+// ===== Navbar: hamburguesa + logout =====
 const toggleBtn = document.getElementById("toggleNav");
 const sidebar   = document.getElementById("sidebar");
 toggleBtn?.addEventListener("click", () => sidebar?.classList.toggle("active"));
@@ -32,7 +29,7 @@ document.getElementById("logoutSidebar")?.addEventListener("click", async (e) =>
   }
 });
 
-// ========== Helpers ==========
+// ===== Helpers =====
 const listEl  = document.getElementById('list');
 const emptyEl = document.getElementById('empty');
 const totalEl = document.getElementById('total');
@@ -56,20 +53,20 @@ function iAmAdmin() {
   return roles.includes('admin') || FIXED_ADMIN_UIDS.includes(myUid);
 }
 
-// ========== Filtros ==========
+// ===== Filtros =====
 function applyFilters() {
-  const n = (fNombre.value || '').toLowerCase().trim();
-  const c = (fCedula.value || '').trim();
-  const e = (fCorreo.value || '').toLowerCase().trim();
-  const d = fFecha.value || ''; // ISO yyyy-mm-dd
-  const r = fRol.value || '';   // rol seleccionado
+  const n = (fNombre?.value || '').toLowerCase().trim();
+  const c = (fCedula?.value || '').trim();
+  const e = (fCorreo?.value || '').toLowerCase().trim();
+  const d = fFecha?.value || ''; // ISO yyyy-mm-dd
+  const r = fRol?.value || '';   // rol seleccionado
 
   const filtered = USERS.filter(u => {
     if (n && !(`${u.nombre||''} ${u.apellidos||''}`.toLowerCase().includes(n))) return false;
     if (c && !(u.cedula||'').includes(c)) return false;
     if (e && !(u.correo||'').toLowerCase().includes(e)) return false;
     if (d && (u.createdAt||'') < d) return false;
-    if (r && !hasRole(u,r)) return false;  // << filtro por rol
+    if (r && !hasRole(u,r)) return false;
     return true;
   });
 
@@ -80,7 +77,7 @@ function applyFilters() {
   el?.addEventListener('change', applyFilters);
 });
 
-// ========== Render ==========
+// ===== Render =====
 function renderList(items) {
   listEl.innerHTML = '';
   totalEl.textContent = `${items.length} usuario${items.length===1?'':'s'}`;
@@ -188,16 +185,16 @@ function renderList(items) {
   listEl.appendChild(frag);
 }
 
-// ========== Auth / Carga ==========
+// ===== Auth / Carga =====
 onAuthStateChanged(auth, async (user) => {
   if (!user) return location.href = 'index.html';
   myUid = user.uid;
 
-  // Cargar mi doc
+  // Mi doc
   const meSnap = await getDoc(doc(db,'users', user.uid));
   ME = meSnap.exists() ? meSnap.data() : null;
 
-  // Mostrar en navbar los items solo-admin
+  // Gate: solo admin (o UID maestro) accede; si no, al dashboard de cliente
   if (iAmAdmin()) {
     document.querySelectorAll('.sidebar .admin-only').forEach(li => li.style.display = 'list-item');
   } else {
@@ -206,7 +203,7 @@ onAuthStateChanged(auth, async (user) => {
 
   // Listado en tiempo real
   onSnapshot(collection(db,'users'), (snap) => {
-    USERS = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    USERS = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
     USERS.forEach(u => { if (!u.createdAt) u.createdAt = ''; });
     applyFilters();
   }, (err) => {

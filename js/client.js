@@ -247,6 +247,14 @@ document.addEventListener('DOMContentLoaded', () => {
       roles = u.exists() ? (u.data().roles || []) : [];
     } catch {}
 
+    // UID maestro + guard de admin para redirigir fuera del dashboard de alumno
+    const FIXED_ADMIN_UIDS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]);
+    if (FIXED_ADMIN_UIDS.has(user.uid) || roles.includes('admin')) {
+      // Si es admin, este dashboard no aplica: lo mandamos al dashboard de admin
+      location.href = 'admin-dashboard.html';
+      return;
+    }
+
     const holders = ensureCalendarHolders();
     if (!holders) return;
 
