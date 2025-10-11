@@ -80,7 +80,6 @@ window.hideLoader = hideLoader;
     #attModal .att-item{ display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid #233140; border-radius:10px; background:#0f1720; }
     #attModal .close-btn{ padding:8px 12px; border-radius:10px; background:#1f2937; border:1px solid #334155; color:#e5e7eb; cursor:pointer; }
 
-    /* que los números del conteo se vean fuertes, como en admin */
     .fc-daygrid-event .fc-event-title{ font-weight:800; }
   `;
   document.head.appendChild(s);
@@ -112,13 +111,6 @@ function isDateInCurrentMonthCR(dateStr){
   const [y,m]=dateStr.split('-').map(Number);
   return y===cy && m===cm;
 }
-function isDateNotPastCR(dateStr){
-  const {year:cy,month:cm,day:cd}=getTodayCRParts();
-  const [y,m,d]=dateStr.split('-').map(Number);
-  if(y<cy) return false; if(y>cy) return true;
-  if(m<cm) return false; if(m>cm) return true;
-  return d>=cd;
-}
 function nowCRString(){
   const d = new Intl.DateTimeFormat('en-CA',{ timeZone: CR_TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
   const t = new Intl.DateTimeFormat('en-GB',{ timeZone: CR_TZ, hour:'2-digit', minute:'2-digit', hour12:false }).format(new Date());
@@ -139,7 +131,7 @@ function canBook(dateStr, timeStr){
   }
   return { ok:true };
 }
-/* Cancelar: solo si aún no empieza (estrictamente antes del inicio) */
+/* Cancelar: solo si aún no empieza */
 function canCancel(dateStr, timeStr){
   const {date:today, time:nowT} = nowCRString();
   const now  = crDateTime(today, nowT);
@@ -147,7 +139,7 @@ function canCancel(dateStr, timeStr){
   return (slot - now) > 0;
 }
 
-/* ───── Contenedores de ambos calendarios ───── */
+/* ───── Contenedores ───── */
 function ensureCalendarHolders(){
   const card = document.querySelector('.calendar-wrapper .card');
   if (!card) return null;
@@ -178,7 +170,7 @@ function ensureCalendarHolders(){
   return { shell, sHold, aHold };
 }
 
-/* ───── Popup asistencia (inyectado) ───── */
+/* ───── Popup asistencia ───── */
 function ensureAttendancePopup(){
   if (document.getElementById('attModal')) return;
   const m = document.createElement('div');
@@ -195,18 +187,15 @@ function ensureAttendancePopup(){
   document.body.appendChild(m);
   m.querySelector('#attClose').onclick = () => {
     m.classList.remove('active');
-    killTooltips(); // limpiar tooltips al cerrar
+    killTooltips();
   };
 }
-
-/* ─── Mata-tooltips (para evitar que queden detrás del modal) ─── */
 function killTooltips() {
   document.querySelectorAll('.custom-tooltip').forEach(el => el.remove());
 }
 
 /* ───── Boot ───── */
 document.addEventListener('DOMContentLoaded', () => {
-  // Sidebar + logout
   const toggleBtn = document.getElementById("toggleNav");
   const sidebar   = document.getElementById("sidebar");
   if (toggleBtn && sidebar) toggleBtn.addEventListener("click", () => sidebar.classList.toggle("active"));
@@ -223,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
   onAuthStateChanged(auth, async user => {
     if (!user) { location.href='./index.html'; return; }
 
-    // código de asistencia
+    // código asistencia
     const codeEl = document.getElementById('attendanceCodeDisplay');
     if (codeEl) {
       try {
@@ -240,50 +229,40 @@ document.addEventListener('DOMContentLoaded', () => {
       tick(); setInterval(tick,1000);
     }
 
-    // ── roles & montaje inteligente (sin romper nada) ──
+    // roles
     let roles = [];
     try {
       const u = await getDoc(doc(db,'users',user.uid));
       roles = u.exists() ? (u.data().roles || []) : [];
     } catch {}
 
-    // UID maestro + guard de admin para redirigir fuera del dashboard de alumno
-    const FIXED_ADMIN_UIDS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]);
-    if (FIXED_ADMIN_UIDS.has(user.uid) || roles.includes('admin')) {
-      // Si es admin, este dashboard no aplica: lo mandamos al dashboard de admin
-      location.href = 'admin-dashboard.html';
-      return;
-    }
-
     const holders = ensureCalendarHolders();
     if (!holders) return;
 
-    const isStudent = roles.includes('student');
-    const isProf    = roles.includes('professor');
-    const hasBoth   = isStudent && isProf;
+    ensureAttendancePopup();
 
-    // Switch solo si tiene ambos
-    if (hasBoth) buildModeSwitch(holders.shell);
+    const isStudent   = roles.includes('student');
+    const isProfessor = roles.includes('professor');
+    const hasBoth     = isStudent && isProfessor;
 
-    // Modal de asistencia solo si puede verlo (professor)
-    if (isProf) ensureAttendancePopup();
+    // Construir siempre ambos calendarios (mejor rendimiento de RT al cambiar)
+    buildStudentCalendar(holders.sHold);
+    buildStaffCalendar(holders.aHold);
 
-    // Montar calendarios:
-    // - ambos si tiene ambos (para RT al alternar)
-    // - solo el correspondiente si tiene un rol
-    if (hasBoth || isStudent) buildStudentCalendar(holders.sHold);
-    if (hasBoth || isProf)    buildStaffCalendar(holders.aHold);
-
-    // Visibilidad inicial
-    if (hasBoth) {
-      holders.sHold.classList.add('visible');  holders.sHold.classList.remove('hidden');
-      holders.aHold.classList.add('hidden');   holders.aHold.classList.remove('visible');
-    } else if (isProf) {
-      holders.sHold.classList.add('hidden');   holders.sHold.classList.remove('visible');
-      holders.aHold.classList.add('visible');  holders.aHold.classList.remove('hidden');
+    // Lógica de visibilidad
+    if (hasBoth){
+      buildModeSwitch(holders.shell); // switch visible
+      holders.sHold.classList.add('visible');
+      holders.aHold.classList.add('hidden');
+    } else if (isProfessor && !isStudent) {
+      // solo profesor → solo staff, sin switch
+      holders.sHold.classList.add('hidden');
+      holders.aHold.classList.remove('hidden'); holders.aHold.classList.add('visible');
+      calStaff?.updateSize();
     } else {
-      holders.sHold.classList.add('visible');  holders.sHold.classList.remove('hidden');
-      holders.aHold.classList.add('hidden');   holders.aHold.classList.remove('visible');
+      // solo estudiante (o sin rol definido) → solo student
+      holders.sHold.classList.add('visible');
+      holders.aHold.classList.add('hidden');
     }
   });
 });
@@ -341,10 +320,12 @@ function buildStudentCalendar(holder){
   if (calStudent){ try{calStudent.destroy();}catch{} calStudent=null; }
   holder.innerHTML='';
 
+  const CR = 'America/Costa_Rica';
+
   calStudent = new FullCalendar.Calendar(holder, {
     locale:'es',
     initialView:'dayGridMonth',
-    timeZone: CR_TZ,
+    timeZone: CR,
     headerToolbar:{ left:'', center:'title', right:'' },
     height:'auto', contentHeight:'auto', expandRows:true, handleWindowResize:true,
 
@@ -400,7 +381,7 @@ function buildStudentCalendar(holder){
   requestAnimationFrame(()=>{ calStudent.render(); setTimeout(()=>calStudent.updateSize(), 40); });
 }
 
-/* ───── Calendario: Profesor (apariencia/UX de admin.js) ───── */
+/* ───── Calendario: Profesor (cuenta por día + modal asistencia) ───── */
 function buildStaffCalendar(holder){
   ensureAttendancePopup();
 
@@ -408,15 +389,17 @@ function buildStaffCalendar(holder){
   if (calStaff){ try{calStaff.destroy();}catch{} calStaff=null; }
   holder.innerHTML='';
 
+  const CR = 'America/Costa_Rica';
+
   calStaff = new FullCalendar.Calendar(holder, {
     locale:'es',
     initialView:'dayGridMonth',
-    timeZone: CR_TZ,
+    timeZone: CR,
     headerToolbar:{ left:'', center:'title', right:'' },
     height:'auto', contentHeight:'auto', expandRows:true, handleWindowResize:true,
 
     events(info, success, failure){
-      const qAll = query(collection(db,'reservations')); // sin filtros ⇒ sin índice
+      const qAll = query(collection(db,'reservations')); // sin filtros ⇒ sin índice extra
       unsubStaff = onSnapshot(qAll, snap=>{
         try{
           const byDate = {};
@@ -440,7 +423,7 @@ function buildStaffCalendar(holder){
       return () => unsubStaff && unsubStaff();
     },
 
-    // Evita tooltips cuando el modal esté visible y límpialos al hacer click
+    // Tooltips seguros (se apagan si el modal está abierto)
     eventMouseEnter: info => {
       const modalActive = document.getElementById('attModal')?.classList.contains('active');
       if (modalActive) return;
@@ -458,7 +441,7 @@ function buildStaffCalendar(holder){
     },
 
     eventClick: async info => {
-      killTooltips(); // limpiar por si quedó alguno
+      killTooltips();
       const day = info.event.startStr;
       const list = await getReservasPorDia(day);
       openAttendancePopup(list, day);
@@ -478,11 +461,15 @@ async function addReservation(date, time){
     if (!userDoc.exists()){ showAlert('Perfil no encontrado.','error'); return null; }
     const u = userDoc.data();
 
+    // Guardamos un timestamp del slot para que las reglas apliquen (slotTs opcional)
+    const slotTs = new Date(`${date}T${time}:00-06:00`).getTime();
+
     const docRef = await addDoc(collection(db,'reservations'), {
       date, time,
       userId: auth.currentUser.uid,
       user: auth.currentUser.email,
-      nombre: u.nombre
+      nombre: u.nombre,
+      slotTs
     });
 
     await setDoc(doc(db,'asistencias',date), { creadaEl: Date.now() }, { merge:true });
@@ -532,7 +519,6 @@ function openConfirmReservationModal(date, time){
 
   document.getElementById('confirmBtn').onclick = async () => {
     try{
-      // Doble verificación por si pasa tiempo entre abrir y confirmar
       const check = canBook(date, time);
       if (!check.ok){
         if (check.reason === 'lt1h'){
@@ -584,13 +570,13 @@ function openDeleteReservationModal(resId, date, time){
 }
 function closeModal(){ const m=document.querySelector('.custom-modal'); if (m) m.remove(); }
 
-/* ───── Profesor/Admin: asistencia (idéntico a admin.js) ───── */
+/* ───── Profesor/Admin: asistencia ───── */
 async function getReservasPorDia(day){
   const snap = await getDocs(collection(db,'asistencias',day,'usuarios'));
   return snap.docs.map(d=>({ uid:d.id, nombre:d.data().nombre, presente:d.data().presente || false }));
 }
 function openAttendancePopup(list, day){
-  killTooltips(); // ← quita cualquier tooltip vivo
+  killTooltips();
   const m = document.getElementById('attModal');
   const l = document.getElementById('attList');
   const d = document.getElementById('attDate');
@@ -614,7 +600,6 @@ function openAttendancePopup(list, day){
   });
   m.classList.add('active');
 }
-function cerrarPopup(){ const p=document.getElementById('attModal'); if(p) p.classList.remove('active'); }
 
 /* ───── Logout rojo (si existe) ───── */
 const logoutBtn = document.getElementById('logoutBtn');

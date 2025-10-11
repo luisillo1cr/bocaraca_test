@@ -1,90 +1,72 @@
-// ./js/login.js — Redirección por rol (sin whitelist de correos)
+// ./js/login.js
 import { auth, db } from './firebase-config.js';
-import { signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import {
+  doc, getDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-// UID maestro (sigue teniendo acceso aunque algo falle leyendo roles)
-const FIXED_ADMIN_UIDS = ["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"];
-
-// UI
-const loginForm = document.getElementById('loginForm');
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const forgotPasswordLink = document.getElementById('forgotPasswordLink');
-
-// Intentos fallidos -> mostrar enlace de “olvidé mi contraseña”
-let failedAttempts = parseInt(localStorage.getItem('failedAttempts')) || 0;
-forgotPasswordLink.style.display = failedAttempts >= 3 ? 'block' : 'none';
-
-// Helpers
-async function getUserRoles(uid) {
-  try {
-    const s = await getDoc(doc(db, 'users', uid));
-    return s.exists() ? (s.data().roles || []) : [];
-  } catch (e) {
-    console.error('[login] getUserRoles error:', e);
-    return [];
+// ---- helpers ----------------------------------------------------
+async function ensureUserDoc(uid, email) {
+  // Si no existe, créalo con el mínimo permitido por tus reglas:
+  // roles == ["student"], createdAt string, uid == auth.uid
+  const ref = doc(db, 'users', uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      uid,
+      createdAt: new Date().toISOString(),
+      roles: ['student'],
+      correo: email ?? ''
+    }, { merge: true });
   }
+  return (await getDoc(ref)).data();
 }
 
-function routeByRoles(uid, roles) {
-  const isAdmin = FIXED_ADMIN_UIDS.includes(uid) || roles.includes('admin');
-  // Profesores van al dashboard de cliente (ahí tienen el calendario de profesor)
-  const target = isAdmin ? './admin-dashboard.html' : './client-dashboard.html';
-  window.location.replace(target);
-}
-
-// Si ya está logueado y entra a index.html, ruteamos automáticamente
-onAuthStateChanged(auth, async (user) => {
-  if (!user) return;
+async function routeByRole(user) {
   try {
-    const roles = await getUserRoles(user.uid);
-    routeByRoles(user.uid, roles);
-  } catch (e) {
-    // Si fallara leer roles, el UID maestro igual entra al admin
-    if (FIXED_ADMIN_UIDS.includes(user.uid)) {
-      window.location.replace('./admin-dashboard.html');
+    const data = await ensureUserDoc(user.uid, user.email || '');
+    const roles = Array.isArray(data?.roles) ? data.roles : [];
+
+    // Admin ⇒ admin-dashboard, de lo contrario ⇒ client-dashboard
+    if (roles.includes('admin')) {
+      window.location.href = './admin-dashboard.html';
+    } else {
+      window.location.href = './client-dashboard.html';
     }
+  } catch (err) {
+    console.error('routeByRole error:', err);
+    showAlert('No fue posible cargar tu perfil. Intenta de nuevo.', 'error');
   }
-});
+}
 
-// Submit del login
-loginForm?.addEventListener('submit', async (event) => {
-  event.preventDefault();
+// ---- UI & login -------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('loginForm');
 
-  const email = (emailInput?.value || '').trim();
-  const password = passwordInput?.value || '';
+  // Si ya está autenticado, enruta por rol
+  onAuthStateChanged(auth, (user) => {
+    if (user) routeByRole(user);
+  });
 
-  if (!email || !password) {
-    showAlert("Por favor, ingrese un correo electrónico y una contraseña.", 'error');
-    return;
-  }
-
-  try {
-    const { user } = await signInWithEmailAndPassword(auth, email, password);
-    if (!user) {
-      showAlert("Error: No se pudo iniciar sesión correctamente.", 'error');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = (document.getElementById('email')?.value || '').trim();
+    const pass  = (document.getElementById('password')?.value || '').trim();
+    if (!email || !pass) {
+      showAlert('Completa correo y contraseña', 'error');
       return;
     }
-
-    showAlert("¡Bienvenido! 👍", 'success');
-    localStorage.setItem('failedAttempts', 0);
-
-    // Obtenemos roles y redirigimos por rol
-    const roles = await getUserRoles(user.uid);
-    // pequeño delay solo para que el toast se vea; opcional
-    setTimeout(() => routeByRoles(user.uid, roles), 600);
-
-  } catch (error) {
-    console.error('Error al iniciar sesión:', error.code, error.message);
-    showAlert(`Error: ${error.code} - ${error.message}`, 'error');
-
-    // Contador de intentos fallidos
-    failedAttempts++;
-    localStorage.setItem('failedAttempts', failedAttempts);
-    if (failedAttempts >= 3) {
-      forgotPasswordLink.style.display = 'block';
+    try {
+      const { user } = await signInWithEmailAndPassword(auth, email, pass);
+      showAlert('Sesión iniciada', 'success');
+      await routeByRole(user); // ← aquí se decide la página
+    } catch (err) {
+      console.error(err);
+      showAlert('Credenciales inválidas', 'error');
     }
-  }
+  });
 });

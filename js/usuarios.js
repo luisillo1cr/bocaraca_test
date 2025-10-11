@@ -13,9 +13,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-/* ========= Helper de rol admin  ========= */
+/* ========= Helper de rol admin ========= */
 const FIXED_ADMINS = new Set([
-  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // ← UID maestro
+  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // UID maestro
 ]);
 
 async function getUserRoles(uid) {
@@ -27,9 +27,17 @@ async function getUserRoles(uid) {
   }
 }
 
-async function requireAdmin(user) {
+async function isAdminUser(user) {
   if (!user) return false;
   if (FIXED_ADMINS.has(user.uid)) return true;
+
+  // 1) Custom claim (si lo usas)
+  try {
+    const tok = await user.getIdTokenResult(true);
+    if (tok?.claims?.admin) return true;
+  } catch {/* ignore */}
+
+  // 2) Rol en users/{uid}.roles
   const roles = await getUserRoles(user.uid);
   return roles.includes('admin');
 }
@@ -66,11 +74,12 @@ document.addEventListener("DOMContentLoaded", () => {
   setupSidebarToggle();
 
   onAuthStateChanged(auth, async user => {
-    const ok = await requireAdmin(user);
-    if (!ok) {
-      window.location.href = './index.html';
-      return;
-    }
+    // No autenticado → login
+    if (!user) { window.location.href = './index.html'; return; }
+
+    // Gateo: solo admin puede ver esta página
+    const ok = await isAdminUser(user);
+    if (!ok) { window.location.href = './client-dashboard.html'; return; }
 
     // Logout (sidebar)
     const logoutSidebar = document.getElementById("logoutSidebar");
@@ -87,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Cargar usuarios y enganchar filtros SOLO si es admin
+    // Cargar usuarios y enganchar filtros
     await loadUsers();
     if ($filter()) $filter().addEventListener('change', renderUsers);
     if ($sort())   $sort().addEventListener('change', renderUsers);
@@ -125,14 +134,14 @@ function renderUsers() {
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  const state = $filter() ? $filter().value : 'all';
-  const order = $sort() ? $sort().value   : 'az';
+  const state = $filter() ? $filter().value : 'all'; // all | auth | noauth
+  const order = $sort() ? $sort().value   : 'az';   // az  | za
 
   // 1) filtrar
   let list = usersCache.filter(u => {
     if (state === 'auth')   return !!u.autorizado;
     if (state === 'noauth') return !u.autorizado;
-    return true;
+    return true; // all
   });
 
   // 2) ordenar
@@ -168,12 +177,11 @@ function renderUsers() {
         await updateDoc(doc(db, "users", u.id), { autorizado: checked });
         updateUserInCache(u.id, {autorizado: checked});
         showAlert("Estado actualizado correctamente", "success");
-        // Reaplicar filtros/orden (por si el registro ya no debe verse)
+        // Reaplicar filtros/orden
         renderUsers();
       } catch {
         showAlert("No se pudo actualizar el estado.", "error");
-        // revertir visual si falló
-        e.target.checked = !checked;
+        e.target.checked = !checked; // revertir
       }
     });
 

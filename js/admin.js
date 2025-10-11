@@ -7,26 +7,36 @@ import {
 import { showAlert } from './showAlert.js';
 
 /* ===== Helper roles ===== */
-const FIXED_ADMIN_UIDS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]); // maestro
+const MASTER_UIDS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]); // UID maestro (respaldo)
 
-async function getUserRoles(uid) {
-  try {
-    const s = await getDoc(doc(db, 'users', uid));
-    return s.exists() ? (s.data().roles || []) : [];
-  } catch { return []; }
-}
 async function requireAdmin(user) {
   if (!user) return false;
-  if (FIXED_ADMIN_UIDS.has(user.uid)) return true;
-  const roles = await getUserRoles(user.uid);
-  return roles.includes('admin');
+
+  // 1) Maestro siempre pasa
+  if (MASTER_UIDS.has(user.uid)) return true;
+
+  // 2) Fallback por Custom Claims (si usas Cloud Function)
+  try {
+    const token = await user.getIdTokenResult(true);
+    if (token?.claims?.admin === true) return true;
+  } catch { /* ignore */ }
+
+  // 3) Roles en users/{uid}
+  try {
+    const s = await getDoc(doc(db, 'users', user.uid));
+    const roles = s.exists() ? (Array.isArray(s.data().roles) ? s.data().roles : []) : [];
+    return roles.includes('admin');
+  } catch {
+    return false;
+  }
 }
 
 /* ===== Arranque UI base ===== */
 document.addEventListener('DOMContentLoaded', () => {
   onAuthStateChanged(auth, async user => {
+    if (!user) { window.location.href = './index.html'; return; }
     const ok = await requireAdmin(user);
-    if (!ok) { window.location.href = './index.html'; return; }
+    if (!ok) { showAlert('No autorizado','error'); window.location.href = './client-dashboard.html'; return; }
     iniciarPanelAdmin();
   });
 
@@ -43,7 +53,7 @@ document.getElementById('logoutSidebar')?.addEventListener('click', async e => {
   try {
     await signOut(auth);
     showAlert("Has cerrado sesión", 'success');
-    setTimeout(() => window.location.href = './index.html', 1200);
+    setTimeout(() => window.location.href = './index.html', 900);
   } catch (err) {
     console.error('Error al cerrar sesión:', err);
     showAlert('Hubo un problema al cerrar sesión.', 'error');
@@ -64,43 +74,54 @@ function iniciarPanelAdmin() {
     headerToolbar: { left: '', center: 'title', right: '' },
 
     events(info, success, failure) {
-      const q = query(collection(db, 'reservations'));
+      const q = query(collection(db, 'reservations')); // sin filtros ⇒ no requiere índice
       onSnapshot(q, snap => {
         const byDate = {};
         snap.forEach(d => {
           const data = d.data();
-          if (!data.date) return;
+          if (!data?.date) return;
           byDate[data.date] ??= [];
           byDate[data.date].push(data.nombre || 'Desconocido');
         });
-        success(Object.entries(byDate).map(([date, names]) => ({
-          title: `${names.length}`,
+        const evs = Object.entries(byDate).map(([date, names]) => ({
+          title: String(names.length),
           start: date,
           allDay: true,
           extendedProps: { names }
-        })));
+        }));
+        success(evs);
       }, err => { console.error(err); failure(err); });
     },
 
     eventClick: async info => {
+      // Limpia tooltips rezagados
+      document.querySelectorAll('.custom-tooltip').forEach(t => t.remove());
+
       const day = info.event.startStr;
       const list = await getReservasPorDia(day);
       abrirPopupAsistencia(list, day);
     },
 
     eventMouseEnter: info => {
+      // Si el modal está abierto, no muestres tooltip
+      const modalOpen = document.getElementById('asistenciaPopup')?.classList.contains('active');
+      if (modalOpen) return;
+
       const tip = document.createElement('div');
       tip.className = 'custom-tooltip';
+      tip.style.cssText = 'position:fixed; z-index:10001; background:#0b2540; color:#b4d7ff; border:1px solid #1e3a5f; padding:6px 8px; border-radius:8px; pointer-events:none;';
       tip.innerHTML = `<strong>Usuarios:</strong><br>${(info.event.extendedProps.names||[]).join('<br>')}`;
       document.body.appendChild(tip);
       const move = e => { tip.style.left = `${e.pageX+10}px`; tip.style.top  = `${e.pageY+10}px`; };
+      const cleanup = () => tip.remove();
       info.el.addEventListener('mousemove', move);
-      info.el.addEventListener('mouseleave', () => tip.remove());
+      info.el.addEventListener('mouseleave', cleanup);
+      info.el.addEventListener('click', cleanup);
     },
 
     dayCellClassNames: arg => {
       const d = arg.date.getDay();
-      if (d !== 5 && d !== 6) return ['disabled-day'];
+      return (d !== 5 && d !== 6) ? ['disabled-day'] : [];
     }
   });
 

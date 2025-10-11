@@ -6,14 +6,16 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-// ===== Admin fijo (blindado) =====
+/* ===== Admin fijo (maestro) ===== */
 const FIXED_ADMIN_UIDS = ["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]; // UID maestro
 
-let USERS = [];
-let ME = null;
+/* ===== Estado ===== */
+let USERS = [];     // cache lista
+let ME = null;      // mi doc users/{uid}
 let myUid = null;
+let I_AM_ADMIN = false;
 
-// ===== Navbar: hamburguesa + logout =====
+/* ===== Navbar: hamburguesa + logout ===== */
 const toggleBtn = document.getElementById("toggleNav");
 const sidebar   = document.getElementById("sidebar");
 toggleBtn?.addEventListener("click", () => sidebar?.classList.toggle("active"));
@@ -29,7 +31,7 @@ document.getElementById("logoutSidebar")?.addEventListener("click", async (e) =>
   }
 });
 
-// ===== Helpers =====
+/* ===== Helpers UI ===== */
 const listEl  = document.getElementById('list');
 const emptyEl = document.getElementById('empty');
 const totalEl = document.getElementById('total');
@@ -48,12 +50,9 @@ function initialsFrom(name='', mail='') {
 }
 function hasRole(u, r){ return Array.isArray(u.roles) && u.roles.includes(r); }
 function isFixed(uid){ return FIXED_ADMIN_UIDS.includes(uid); }
-function iAmAdmin() {
-  const roles = ME?.roles || [];
-  return roles.includes('admin') || FIXED_ADMIN_UIDS.includes(myUid);
-}
+function iAmAdmin(){ return I_AM_ADMIN; }
 
-// ===== Filtros =====
+/* ===== Filtros ===== */
 function applyFilters() {
   const n = (fNombre?.value || '').toLowerCase().trim();
   const c = (fCedula?.value || '').trim();
@@ -77,7 +76,7 @@ function applyFilters() {
   el?.addEventListener('change', applyFilters);
 });
 
-// ===== Render =====
+/* ===== Render ===== */
 function renderList(items) {
   listEl.innerHTML = '';
   totalEl.textContent = `${items.length} usuario${items.length===1?'':'s'}`;
@@ -91,7 +90,7 @@ function renderList(items) {
     card.className = 'card';
     card.dataset.uid = u.uid;
 
-    // fila 1
+    // fila 1 — identidad + badges
     const row1 = document.createElement('div');
     row1.className = 'row1';
 
@@ -118,7 +117,7 @@ function renderList(items) {
 
     row1.append(identity, badges);
 
-    // fila 2: chips + guardar
+    // fila 2 — selector de roles + guardar
     const row2 = document.createElement('div');
     row2.style.display = 'grid';
     row2.style.gap = '10px';
@@ -169,7 +168,7 @@ function renderList(items) {
     actions.appendChild(save);
     row2.append(rolesBox, actions);
 
-    // fila 3: info
+    // fila 3 — info extra
     const row3 = document.createElement('div');
     row3.style.display = 'grid';
     row3.style.gap = '6px';
@@ -185,21 +184,33 @@ function renderList(items) {
   listEl.appendChild(frag);
 }
 
-// ===== Auth / Carga =====
+/* ===== Auth / Carga ===== */
 onAuthStateChanged(auth, async (user) => {
-  if (!user) return location.href = 'index.html';
+  if (!user) { location.href = 'index.html'; return; }
   myUid = user.uid;
 
-  // Mi doc
+  // 1) Custom claims (si existen)
+  let claimAdmin = false;
+  try {
+    const token = await user.getIdTokenResult(true);
+    claimAdmin = !!token?.claims?.admin;
+  } catch { /* ignore */ }
+
+  // 2) Mi doc users/{uid}
   const meSnap = await getDoc(doc(db,'users', user.uid));
   ME = meSnap.exists() ? meSnap.data() : null;
 
-  // Gate: solo admin (o UID maestro) accede; si no, al dashboard de cliente
-  if (iAmAdmin()) {
-    document.querySelectorAll('.sidebar .admin-only').forEach(li => li.style.display = 'list-item');
-  } else {
-    return location.href = 'client-dashboard.html';
+  // 3) Decidir si soy admin
+  I_AM_ADMIN = claimAdmin || FIXED_ADMIN_UIDS.includes(myUid) || (ME?.roles || []).includes('admin');
+
+  // Gateo: si no soy admin => dashboard cliente
+  if (!I_AM_ADMIN) {
+    location.href = 'client-dashboard.html';
+    return;
   }
+
+  // Mostrar ítems "admin-only" del sidebar
+  document.querySelectorAll('.sidebar .admin-only').forEach(li => li.style.display = 'list-item');
 
   // Listado en tiempo real
   onSnapshot(collection(db,'users'), (snap) => {

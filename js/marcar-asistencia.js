@@ -7,8 +7,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
+/* ====== Fijos (fallback) ====== */
 const FIXED_ADMINS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]); // UID maestro
 
+/* ====== Helpers de rol ====== */
 async function getUserRoles(uid) {
   try {
     const s = await getDoc(doc(db, 'users', uid));
@@ -17,13 +19,25 @@ async function getUserRoles(uid) {
     return [];
   }
 }
+
 async function requireStaff(user) {
   if (!user) return false;
-  if (FIXED_ADMINS.has(user.uid)) return true;    // admin fijo
+
+  // Siempre permitir UID maestro
+  if (FIXED_ADMINS.has(user.uid)) return true;
+
+  // Refresca claims por si se acaban de cambiar
+  try {
+    const tok = await user.getIdTokenResult(true);
+    if (tok?.claims?.admin) return true;
+  } catch {/* ignore */}
+
+  // Roles en Firestore
   const roles = await getUserRoles(user.uid);
   return roles.includes('admin') || roles.includes('professor');
 }
 
+/* ====== Boot ====== */
 document.addEventListener('DOMContentLoaded', () => {
   // Toggle sidebar
   const toggleButton = document.getElementById("toggleNav");
@@ -32,9 +46,10 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleButton.addEventListener("click", () => sidebar.classList.toggle("active"));
   }
 
+  // Lucide (opcional)
   if (window.lucide) window.lucide.createIcons();
 
-  // Seguridad: solo admin/professor (o UID maestro)
+  // Seguridad: solo admin/profesor (o UID maestro)
   onAuthStateChanged(auth, async (user) => {
     const ok = await requireStaff(user);
     if (!ok) { window.location.href = './index.html'; return; }
@@ -43,33 +58,56 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cerrar sesión
   document.getElementById("logoutSidebar")?.addEventListener("click", async (e) => {
     e.preventDefault();
-    try { await signOut(auth); showAlert("Has cerrado sesión", "success"); setTimeout(() => (window.location.href = "index.html"), 800); }
-    catch { showAlert("Error al cerrar sesión", "error"); }
+    try {
+      await signOut(auth);
+      showAlert("Has cerrado sesión", "success");
+      setTimeout(() => (window.location.href = "index.html"), 800);
+    } catch {
+      showAlert("Error al cerrar sesión", "error");
+    }
   });
 
-  // ── 1) Marcar por código
+  /* ──────────────────────────────────────────────
+   * 1) Marcar asistencia por CÓDIGO (4 dígitos)
+   * ────────────────────────────────────────────── */
   const form = document.getElementById("attendanceForm");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const code = (document.getElementById("codeInput").value || '').trim();
+    const codeEl = document.getElementById("codeInput");
+    const code = (codeEl?.value || '').trim();
+
     if (!/^\d{4}$/.test(code)) {
       showAlert("Ingresa un código válido de 4 dígitos", "error");
       return;
     }
+
     try {
+      // Busca el usuario por attendanceCode
       const usersQ = query(collection(db, "users"), where("attendanceCode", "==", code));
       const snap   = await getDocs(usersQ);
-      if (snap.empty) { showAlert("Código no encontrado", "error"); return; }
+      if (snap.empty) {
+        showAlert("Código no encontrado", "error");
+        return;
+      }
 
       const uid     = snap.docs[0].id;
       const nombre  = snap.docs[0].data().nombre || 'Alumno';
-      const fechaCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
+      const fechaCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" }); // YYYY-MM-DD
 
-      await setDoc(doc(db, "asistencias", fechaCR, "usuarios", uid), {
-        presente: true,
-        hora: new Intl.DateTimeFormat('es-CR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' }).format(new Date()),
-        nombre
-      }, { merge: true });
+      // Registra/actualiza la asistencia del día
+      await setDoc(
+        doc(db, "asistencias", fechaCR, "usuarios", uid),
+        {
+          presente: true,
+          hora: new Intl.DateTimeFormat('es-CR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'America/Costa_Rica'
+          }).format(new Date()),
+          nombre
+        },
+        { merge: true }
+      );
 
       showAlert(`Asistencia marcada: ${nombre}`, "success");
       e.target.reset();
@@ -79,7 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── 2) Generar QR de clase
+  /* ──────────────────────────────────────────────
+   * 2) Generar QR del día para clase
+   * ────────────────────────────────────────────── */
   const qrCanvas = document.getElementById("qrcode");
   const btnQR    = document.getElementById("btnGenQR");
 
@@ -89,7 +129,8 @@ document.addEventListener('DOMContentLoaded', () => {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src   = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
-        s.onload = resolve; s.onerror = reject;
+        s.onload = resolve;
+        s.onerror = reject;
         document.head.appendChild(s);
       });
       return !!(window.QRCode && window.QRCode.toCanvas);
@@ -101,13 +142,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnQR?.addEventListener("click", async () => {
     const ok = await ensureQRCodeLib();
-    if (!ok) { showAlert("No se pudo cargar el generador de QR.", "error"); return; }
+    if (!ok) {
+      showAlert("No se pudo cargar el generador de QR.", "error");
+      return;
+    }
+
     const fechaCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
-    const payload = JSON.stringify({ fecha: fechaCR });
+    const payload = JSON.stringify({ fecha: fechaCR }); // sencillo: fecha del día
 
     window.QRCode.toCanvas(qrCanvas, payload, { width: 260 }, (err) => {
-      if (err) { console.error("QR error:", err); showAlert("No se pudo generar el QR", "error"); }
-      else { showAlert("QR generado", "success"); }
+      if (err) {
+        console.error("QR error:", err);
+        showAlert("No se pudo generar el QR", "error");
+      } else {
+        showAlert("QR generado", "success");
+      }
     });
   });
 });
