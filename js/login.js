@@ -1,74 +1,90 @@
-import { auth } from './firebase-config.js';
-import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-// Función de alertas visuales
+// ./js/login.js — Redirección por rol (sin whitelist de correos)
+import { auth, db } from './firebase-config.js';
+import { signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-// Lista de correos de administradores
-const adminEmails = [
-    "luis.davidsolorzano@outlook.es",
-    "ivan.cicc@hotmail.com"
-];
+// UID maestro (sigue teniendo acceso aunque algo falle leyendo roles)
+const FIXED_ADMIN_UIDS = ["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"];
 
-// Obtener el formulario y los elementos
+// UI
 const loginForm = document.getElementById('loginForm');
 const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
-const forgotPasswordLink = document.getElementById('forgotPasswordLink'); // Enlace de cambio de contraseña
+const forgotPasswordLink = document.getElementById('forgotPasswordLink');
 
-// Obtener el contador de intentos fallidos desde localStorage (si existe)
+// Intentos fallidos -> mostrar enlace de “olvidé mi contraseña”
 let failedAttempts = parseInt(localStorage.getItem('failedAttempts')) || 0;
+forgotPasswordLink.style.display = failedAttempts >= 3 ? 'block' : 'none';
 
-// Mostrar o ocultar el enlace de cambio de contraseña
-if (failedAttempts >= 3) {
-    forgotPasswordLink.style.display = 'block';  // Hacer visible el enlace
-} else {
-    forgotPasswordLink.style.display = 'none';   // Ocultar el enlace
+// Helpers
+async function getUserRoles(uid) {
+  try {
+    const s = await getDoc(doc(db, 'users', uid));
+    return s.exists() ? (s.data().roles || []) : [];
+  } catch (e) {
+    console.error('[login] getUserRoles error:', e);
+    return [];
+  }
 }
 
-loginForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
+function routeByRoles(uid, roles) {
+  const isAdmin = FIXED_ADMIN_UIDS.includes(uid) || roles.includes('admin');
+  // Profesores van al dashboard de cliente (ahí tienen el calendario de profesor)
+  const target = isAdmin ? './admin-dashboard.html' : './client-dashboard.html';
+  window.location.replace(target);
+}
 
-    const email = emailInput.value;
-    const password = passwordInput.value;
+// Si ya está logueado y entra a index.html, ruteamos automáticamente
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+  try {
+    const roles = await getUserRoles(user.uid);
+    routeByRoles(user.uid, roles);
+  } catch (e) {
+    // Si fallara leer roles, el UID maestro igual entra al admin
+    if (FIXED_ADMIN_UIDS.includes(user.uid)) {
+      window.location.replace('./admin-dashboard.html');
+    }
+  }
+});
 
-    if (!email || !password) {
-        showAlert("Por favor, ingrese un correo electrónico y una contraseña.", 'error');
-        return;
+// Submit del login
+loginForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const email = (emailInput?.value || '').trim();
+  const password = passwordInput?.value || '';
+
+  if (!email || !password) {
+    showAlert("Por favor, ingrese un correo electrónico y una contraseña.", 'error');
+    return;
+  }
+
+  try {
+    const { user } = await signInWithEmailAndPassword(auth, email, password);
+    if (!user) {
+      showAlert("Error: No se pudo iniciar sesión correctamente.", 'error');
+      return;
     }
 
-    try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+    showAlert("¡Bienvenido! 👍", 'success');
+    localStorage.setItem('failedAttempts', 0);
 
-        // Verificamos si el objeto 'user' no es null y tiene la propiedad email
-        if (user && user.email) {
-            showAlert("¡Bienvenido!👍", 'success');
-            localStorage.setItem('failedAttempts', 0); // Reiniciar los intentos fallidos en el login
+    // Obtenemos roles y redirigimos por rol
+    const roles = await getUserRoles(user.uid);
+    // pequeño delay solo para que el toast se vea; opcional
+    setTimeout(() => routeByRoles(user.uid, roles), 600);
 
-            // Redirigir después de un pequeño delay
-            setTimeout(() => {
-                if (adminEmails.includes(user.email)) {
-                    window.location.href = "./admin-dashboard.html";
-                } else {
-                    window.location.href = "./client-dashboard.html";
-                }
-            }, 1500);
-        } else {
-            showAlert("Error: No se pudo iniciar sesión correctamente.", 'error');
-        }
+  } catch (error) {
+    console.error('Error al iniciar sesión:', error.code, error.message);
+    showAlert(`Error: ${error.code} - ${error.message}`, 'error');
 
-    } catch (error) {
-        console.error('Error al iniciar sesión:', error.code, error.message);
-        showAlert(`Error: ${error.code} - ${error.message}`, 'error');
-
-        // Incrementar el contador de intentos fallidos
-        failedAttempts++;
-        localStorage.setItem('failedAttempts', failedAttempts);
-
-        // Si el número de intentos fallidos llega a 3, habilitar el enlace
-        if (failedAttempts >= 3) {
-            forgotPasswordLink.style.display = 'block';  // Mostrar el enlace
-        }
+    // Contador de intentos fallidos
+    failedAttempts++;
+    localStorage.setItem('failedAttempts', failedAttempts);
+    if (failedAttempts >= 3) {
+      forgotPasswordLink.style.display = 'block';
     }
+  }
 });
