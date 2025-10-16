@@ -8,6 +8,9 @@ import {
   getDocs,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+import { gateAdmin } from './role-guard.js';
+await gateAdmin(); // redirige a client-dashboard si no es admin
+
 /* ─────────────────────────────────────────────────────────────
    UTILIDADES DE RENDER
    ───────────────────────────────────────────────────────────── */

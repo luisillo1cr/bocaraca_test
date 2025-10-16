@@ -110,7 +110,7 @@
     overflow:visible;
   }
   .chart-card h3{ margin:0 0 10px; font-size:17px; }
-  .chart-card canvas{ width:100% !important; height:auto !important; display:block; }
+  .chart-card canvas{ width:100% !important; height:320px !important; display:block; }
 
   /* Badge del año */
   .pill{
@@ -187,14 +187,22 @@
     <footer>
         <p>© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
     </footer>
+    
+  <!-- GATE: Solo admin -->
+  <script type="module">
+    import { gateAdmin } from './js/role-guard.js';
+    await gateAdmin();
+  </script>
 
-    <script>
+  <!-- Lógica -->
+  <script type="module" src="./js/admin-metrics.js"></script>
+
+  <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
-          .catch(console.error);
-      });
+      addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(console.error));
     }
   </script>
+
+
 </body>
 </html>

@@ -5,10 +5,9 @@ const cors = require('cors')({ origin: true });
 
 if (!admin.apps.length) admin.initializeApp();
 
-/* ========= Config ========= */
-const FIXED_ADMINS = new Set([
-  'ScODWX8zq1ZXpzbbKk5vuHwSo7N2' // UID maestro
-]);
+import { gateAdmin } from './role-guard.js';
+await gateAdmin(); // redirige a client-dashboard si no es admin
+
 
 /* ========= Helpers ========= */
 async function verifyBearer(req) {
@@ -25,7 +24,6 @@ async function verifyBearer(req) {
 
 async function callerIsAdmin(decoded) {
   if (!decoded) return false;
-  if (FIXED_ADMINS.has(decoded.uid)) return true;
   if (decoded.admin === true) return true; // custom claim ya marcado
   // Fallback leyendo roles en Firestore
   try {

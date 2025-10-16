@@ -1,4 +1,4 @@
-// ./js/client.js — Student/Professor dual render + flip + admin-like staff view + RT + loader (+tooltip fix)
+// ./js/client.js
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
@@ -15,6 +15,10 @@ import {
   updateDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
+
+import { gateAuthed } from './role-guard.js';
+await gateAuthed(); // redirige a index si no hay sesión
+
 
 /* ───────── Estado ───────── */
 let calStudent = null;
@@ -158,7 +162,7 @@ function ensureCalendarHolders(){
   if (!sHold){
     sHold = document.createElement('div');
     sHold.id = 'calStudentHolder';
-    sHold.className = 'calendar-pane visible';
+    sHold.className = 'calendar-pane visible'; // default visible; luego ajustamos
     shell.appendChild(sHold);
   }
   if (!aHold){
@@ -210,26 +214,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   onAuthStateChanged(auth, async user => {
-    if (!user) { location.href='./index.html'; return; }
+    if (!user) { location.href = './index.html'; return; }
 
-    // código asistencia
+    // Código de asistencia del usuario
     const codeEl = document.getElementById('attendanceCodeDisplay');
     if (codeEl) {
       try {
-        const snap = await getDoc(doc(db,'users',user.uid));
-        codeEl.textContent = `Tu código de asistencia: ${snap.exists() ? (snap.data().attendanceCode || '—') : '—'}`;
+        const s = await getDoc(doc(db,'users',user.uid));
+        codeEl.textContent = `Tu código de asistencia: ${s.exists() ? (s.data().attendanceCode || '—') : '—'}`;
       } catch { codeEl.textContent='Error al cargar el código.'; }
     }
 
-    // reloj CR
+    // Reloj CR
     const localTimeEl = document.getElementById('local-time');
     if (localTimeEl) {
-      const fmt = new Intl.DateTimeFormat('es-CR',{hour:'numeric',minute:'numeric',second:'numeric',hour12:true,timeZone: CR_TZ});
+      const fmt = new Intl.DateTimeFormat('es-CR',{hour:'numeric',minute:'numeric',second:'numeric',hour12:true,timeZone: 'America/Costa_Rica'});
       const tick=()=>localTimeEl.textContent=`Hora en Costa Rica: ${fmt.format(new Date())}`;
       tick(); setInterval(tick,1000);
     }
 
-    // roles
+    // Roles (ya asegurado el perfil vía gateAuthed en el encabezado del archivo)
     let roles = [];
     try {
       const u = await getDoc(doc(db,'users',user.uid));
@@ -238,29 +242,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const holders = ensureCalendarHolders();
     if (!holders) return;
-
     ensureAttendancePopup();
 
     const isStudent   = roles.includes('student');
     const isProfessor = roles.includes('professor');
     const hasBoth     = isStudent && isProfessor;
 
-    // Construir siempre ambos calendarios (mejor rendimiento de RT al cambiar)
     buildStudentCalendar(holders.sHold);
     buildStaffCalendar(holders.aHold);
 
-    // Lógica de visibilidad
     if (hasBoth){
-      buildModeSwitch(holders.shell); // switch visible
+      buildModeSwitch(holders.shell);
       holders.sHold.classList.add('visible');
       holders.aHold.classList.add('hidden');
     } else if (isProfessor && !isStudent) {
-      // solo profesor → solo staff, sin switch
       holders.sHold.classList.add('hidden');
       holders.aHold.classList.remove('hidden'); holders.aHold.classList.add('visible');
       calStaff?.updateSize();
     } else {
-      // solo estudiante (o sin rol definido) → solo student
       holders.sHold.classList.add('visible');
       holders.aHold.classList.add('hidden');
     }
@@ -350,7 +349,7 @@ function buildStudentCalendar(holder){
       const dateStr = info.dateStr;
       const dow = info.date.getUTCDay();
       if(!isDateInCurrentMonthCR(dateStr)){ showAlert('Solo puedes reservar en el mes actual.','error'); return; }
-      if(dow!==5 && dow!==6){ showAlert('Solo viernes y sábados.','error'); return; }
+      if(dow!==5 && d!==6){ showAlert('Solo viernes y sábados.','error'); return; }
 
       const classTime = (dow===5) ? '20:30' : '09:00';
       const check = canBook(dateStr, classTime);

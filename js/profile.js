@@ -10,6 +10,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
+import { gateAuthed } from './role-guard.js';
+await gateAuthed(); // redirige a index si no hay sesión
+
 /* ───────────────── Sidebar ───────────────── */
 (function setupSidebarToggle(){
   const btn = document.getElementById('toggleNav');

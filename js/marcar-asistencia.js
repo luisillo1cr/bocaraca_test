@@ -7,8 +7,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-/* ====== Fijos (fallback) ====== */
-const FIXED_ADMINS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]); // UID maestro
+import { gateStaff } from './role-guard.js';
+await gateStaff(); // redirige a client-dashboard si no es admin/professor
 
 /* ====== Helpers de rol ====== */
 async function getUserRoles(uid) {
@@ -22,9 +22,6 @@ async function getUserRoles(uid) {
 
 async function requireStaff(user) {
   if (!user) return false;
-
-  // Siempre permitir UID maestro
-  if (FIXED_ADMINS.has(user.uid)) return true;
 
   // Refresca claims por si se acaban de cambiar
   try {

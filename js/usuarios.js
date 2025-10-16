@@ -13,10 +13,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-/* ========= Helper de rol admin ========= */
-const FIXED_ADMINS = new Set([
-  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // UID maestro
-]);
+import { gateAdmin } from './role-guard.js';
+await gateAdmin(); // redirige a client-dashboard si no es admin
+
 
 async function getUserRoles(uid) {
   try {
@@ -29,7 +28,6 @@ async function getUserRoles(uid) {
 
 async function isAdminUser(user) {
   if (!user) return false;
-  if (FIXED_ADMINS.has(user.uid)) return true;
 
   // 1) Custom claim (si lo usas)
   try {

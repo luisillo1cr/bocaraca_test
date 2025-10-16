@@ -168,38 +168,12 @@
   <footer>
     <p class="footer">© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
   </footer>
-
-<script type="module">
-  import { auth, db } from './js/firebase-config.js';
-  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-  // UID maestro (sigue teniendo acceso total)
-  const FIXED_ADMIN_UIDS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]);
-
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) return; // aún no logueado
-    try {
-      // Si es el UID maestro => admin
-      if (FIXED_ADMIN_UIDS.has(user.uid)) {
-        location.href = 'admin-dashboard.html';
-        return;
-      }
-
-      // Lee roles desde Firestore (no usamos custom claims)
-      const snap  = await getDoc(doc(db, 'users', user.uid));
-      const roles = snap.exists() ? (snap.data().roles || ['student']) : ['student'];
-
-      if (roles.includes('admin')) {
-        location.href = 'admin-dashboard.html';
-      } else {
-        location.href = 'client-dashboard.html';
-      }
-    } catch (e) {
-      // Ante cualquier fallo, mejor llevarlo al dashboard de alumno
-      location.href = 'client-dashboard.html';
-    }
-  });
+  
+<script type="module" src="./js/login.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(console.error));
+  }
 </script>
 
 <script>

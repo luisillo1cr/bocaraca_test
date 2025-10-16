@@ -29,7 +29,7 @@ function ensureUI(){
   const wrap = document.createElement("div");
   wrap.id = "installBanner";
   wrap.innerHTML = `
-    <button id="btnInstall" class="btn">Instalar app</button>
+    <button id="btnInstall" class="btn">Instalar app 🐍</button>
     <button id="btnIosTip" class="btn secondary">¿iPhone?</button>
   `;
   host.insertAdjacentElement("afterend", wrap);

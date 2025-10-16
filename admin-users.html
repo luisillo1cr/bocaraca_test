@@ -132,6 +132,20 @@
     <div id="empty" class="empty" style="display:none">Sin resultados con los filtros aplicados.</div>
   </main>
 
-  <script type="module" src="./js/admin-users.js"></script>
+<!-- GATE: Solo admin -->
+<script type="module">
+  import { gateAdmin } from './js/role-guard.js';
+  await gateAdmin();
+</script>
+
+<!-- Lógica -->
+<script type="module" src="./js/admin-users.js"></script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(console.error));
+  }
+</script>
+
 </body>
 </html>

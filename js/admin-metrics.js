@@ -1,51 +1,33 @@
 // ./js/admin-metrics.js
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import {
-  collection, getDocs, doc, getDoc
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
+import { gateAdmin } from './role-guard.js';
 
-/* ========= Gate de administrador (UID maestro + rol admin) ========= */
-const FIXED_ADMINS = new Set([
-  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // UID maestro
-]);
+// Gate único. Si no es admin → client-dashboard (evita loops)
+await gateAdmin({ onDeny: 'client-dashboard.html' });
 
-async function getUserRoles(uid) {
-  try {
-    const s = await getDoc(doc(db, 'users', uid));
-    return s.exists() ? (s.data().roles || []) : [];
-  } catch { return []; }
-}
-async function requireAdmin(user) {
-  if (!user) return false;
-  if (FIXED_ADMINS.has(user.uid)) return true;
-  const roles = await getUserRoles(user.uid);
-  return roles.includes('admin');
-}
-
-/* ========= Utilidades de fecha ========= */
 const crTZ = 'America/Costa_Rica';
 const todayISO = () => new Date().toLocaleDateString('en-CA', { timeZone: crTZ });
 const monthsES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
-function monthsBetween(d1, d2) {
+function monthsBetween(d1, d2){
   const y = d2.getFullYear() - d1.getFullYear();
   const m = d2.getMonth() - d1.getMonth();
-  const adjust = d2.getDate() >= d1.getDate() ? 0 : -1;
-  return Math.max(0, y * 12 + m + adjust);
+  const total = y*12 + m + (d2.getDate() >= d1.getDate() ? 0 : -1);
+  return Math.max(0,total);
 }
-function parseMaybeDate(v) {
+function parseMaybeDate(v){
   if (!v) return null;
   if (typeof v === 'number') return new Date(v);
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 }
 
-/* ========= Sidebar / Logout / Last update ========= */
 document.addEventListener('DOMContentLoaded', () => {
   const toggleBtn = document.getElementById('toggleNav');
-  const sidebar   = document.getElementById('sidebar');
+  const sidebar = document.getElementById('sidebar');
   toggleBtn?.addEventListener('click', ()=> sidebar?.classList.toggle('active'));
 
   document.getElementById('logoutSidebar')?.addEventListener('click', async (e)=>{
@@ -60,17 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (last) last.textContent = `Actualizado: ${fmt.format(new Date())}`;
 });
 
-/* ========= Auth gate ========= */
 onAuthStateChanged(auth, async (user) => {
   if (!user) { location.href='index.html'; return; }
-
-  const ok = await requireAdmin(user);
-  if (!ok) {
-    showAlert('No autorizado', 'error');
-    location.href = 'client-dashboard.html';
-    return;
-  }
-
   try { await buildMetrics(); }
   catch (e) {
     console.error(e);
@@ -78,14 +51,15 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-/* ========= Cache Chart instances (por si re-renderizamos) ========= */
+/* ====== Charts cache ====== */
 const charts = { signup: null, gender: null, age: null };
-function destroyIfExists(key) {
-  try { charts[key]?.destroy(); } catch {}
-  charts[key] = null;
+function destroyIfExists(key) { try { charts[key]?.destroy(); } catch {} charts[key] = null; }
+function lockCanvasHeight(canvas, px){
+  if (!canvas) return;
+  try { canvas.style.setProperty('height', `${px}px`, 'important'); } catch {}
 }
 
-/* ========= Core: buildMetrics ========= */
+/* ====== Core: buildMetrics ====== */
 async function buildMetrics(){
   const usersSnap = await getDocs(collection(db,'users'));
   const users = usersSnap.docs.map(d => ({ id:d.id, ...d.data() }));
@@ -105,17 +79,14 @@ async function buildMetrics(){
   let ageKnown = 0;
 
   for (const u of users) {
-    // Activos por expiryDate (si no hay fecha, lo tratamos como inactivo)
     const exp = parseMaybeDate(u.expiryDate || u.expira || u.expire || null);
     if (exp) (exp >= today ? activos++ : inactivos++); else inactivos++;
 
-    // Roles
     const roles = Array.isArray(u.roles) ? u.roles : [];
     if (roles.includes('admin')) nAdmins++;
     if (roles.includes('professor')) nProfes++;
     if (roles.includes('student') || (!roles.includes('admin') && !roles.includes('professor'))) nStudents++;
 
-    // Permanencia y altas por mes (año actual)
     const created = parseMaybeDate(u.createdAt);
     if (created){
       sumMonths += monthsBetween(created, today);
@@ -123,13 +94,11 @@ async function buildMetrics(){
       if (created.getFullYear() === year) altasMes[created.getMonth()]++;
     }
 
-    // Género
     const g = (u.genero || u.gender || '').toString().trim().toLowerCase();
     if (['m','male','masculino'].includes(g)) genderCount.male++;
     else if (['f','female','femenino'].includes(g)) genderCount.female++;
     else if (g) genderCount.other++; else genderCount.unknown++;
 
-    // Edad (varios alias admitidos)
     const dob = parseMaybeDate(u.birthDate || u.dob || u.fechaNacimiento || u.nacimiento);
     if (dob){
       const age = Math.floor((today - dob) / (365.25*24*60*60*1000));
@@ -145,7 +114,6 @@ async function buildMetrics(){
     }
   }
 
-  // KPIs
   qs('#kpiTotal')?.replaceChildren(document.createTextNode(total));
   qs('#kpiActivos')?.replaceChildren(document.createTextNode(activos));
   qs('#kpiInactivos')?.replaceChildren(document.createTextNode(inactivos));
@@ -153,7 +121,6 @@ async function buildMetrics(){
   qs('#kpiProfes')?.replaceChildren(document.createTextNode(nProfes));
   qs('#kpiStudents')?.replaceChildren(document.createTextNode(nStudents));
 
-  // Nuevos últimos 30 días
   const ms30 = 30*24*60*60*1000;
   const now = Date.now();
   const nuevos30 = users.reduce((acc,u)=>{
@@ -162,38 +129,32 @@ async function buildMetrics(){
   }, 0);
   qs('#kpiNuevos')?.replaceChildren(document.createTextNode(nuevos30));
 
-  // Permanencia promedio (meses)
   const promMeses = contMonths ? (sumMonths/contMonths) : 0;
   qs('#kpiPermanencia')?.replaceChildren(document.createTextNode(promMeses.toFixed(1)));
 
-  // Charts (si Chart.js está cargado y los canvas existen)
   qs('#yearBadge')?.replaceChildren(document.createTextNode(year.toString()));
   drawSignupChart(altasMes);
   drawGenderChart(genderCount);
   drawAgeChart(ageBuckets, ageKnown);
 }
 
-/* ========= Charts ========= */
+/* ====== Charts ====== */
 function drawSignupChart(series){
   const canvas = document.getElementById('signupChart');
   if (!canvas || typeof Chart === 'undefined') return;
+  lockCanvasHeight(canvas, 180);
   destroyIfExists('signup');
   const ctx = canvas.getContext('2d');
   charts.signup = new Chart(ctx, {
     type: 'line',
     data: {
       labels: monthsES,
-      datasets: [{
-        label: 'Altas',
-        data: series,
-        borderWidth: 2,
-        tension: .25,
-        pointRadius: 3,
-      }]
+      datasets: [{ label: 'Altas', data: series, borderWidth: 2, tension: .25, pointRadius: 3 }]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: true,
+      aspectRatio: 16/9,
       plugins: { legend: { display:false }, tooltip: { mode:'index', intersect:false } },
       interaction: { mode:'nearest', intersect:false },
       scales: { y: { beginAtZero:true, ticks:{ precision:0 } } }
@@ -204,10 +165,9 @@ function drawSignupChart(series){
 function drawGenderChart(counts){
   const canvas = document.getElementById('genderChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  const unknownText = counts.unknown ? `Sin dato: ${counts.unknown}` : '';
   const note = qs('#genderNote');
-  if (note) note.textContent = unknownText;
-
+  if (note) note.textContent = counts.unknown ? `Sin dato: ${counts.unknown}` : '';
+  lockCanvasHeight(canvas, 180);
   destroyIfExists('gender');
   const ctx = canvas.getContext('2d');
   charts.gender = new Chart(ctx, {
@@ -218,7 +178,8 @@ function drawGenderChart(counts){
     },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: true,
+      aspectRatio: 1.6,
       cutout: '65%',
       plugins: { legend: { position:'bottom' } }
     }
@@ -232,7 +193,7 @@ function drawAgeChart(buckets, known){
   const data = labels.map(k => buckets[k]);
   const note = qs('#ageNote');
   if (note) note.textContent = known ? '' : 'Aún no hay fechas de nacimiento registradas.';
-
+  lockCanvasHeight(canvas, 220);
   destroyIfExists('age');
   const ctx = canvas.getContext('2d');
   charts.age = new Chart(ctx, {
@@ -240,12 +201,13 @@ function drawAgeChart(buckets, known){
     data: { labels, datasets:[{ label:'Usuarios', data, borderWidth:1 }]},
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: true,
+      aspectRatio: 16/9,
       plugins: { legend: { display:false } },
       scales: { y: { beginAtZero:true, ticks:{ precision:0 } } }
     }
   });
 }
 
-/* ========= utils ========= */
+/* ====== utils ====== */
 function qs(sel){ return document.querySelector(sel); }

@@ -2,41 +2,17 @@
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
-  collection, query, onSnapshot, getDocs, doc, getDoc, updateDoc
+  collection, query, onSnapshot, getDocs, doc, updateDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
+import { gateAdmin } from './role-guard.js';
 
-/* ===== Helper roles ===== */
-const MASTER_UIDS = new Set(["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]); // UID maestro (respaldo)
+// Gate único (sin loops)
+await gateAdmin({ onDeny: 'client-dashboard.html' });
 
-async function requireAdmin(user) {
-  if (!user) return false;
-
-  // 1) Maestro siempre pasa
-  if (MASTER_UIDS.has(user.uid)) return true;
-
-  // 2) Fallback por Custom Claims (si usas Cloud Function)
-  try {
-    const token = await user.getIdTokenResult(true);
-    if (token?.claims?.admin === true) return true;
-  } catch { /* ignore */ }
-
-  // 3) Roles en users/{uid}
-  try {
-    const s = await getDoc(doc(db, 'users', user.uid));
-    const roles = s.exists() ? (Array.isArray(s.data().roles) ? s.data().roles : []) : [];
-    return roles.includes('admin');
-  } catch {
-    return false;
-  }
-}
-
-/* ===== Arranque UI base ===== */
 document.addEventListener('DOMContentLoaded', () => {
-  onAuthStateChanged(auth, async user => {
+  onAuthStateChanged(auth, (user) => {
     if (!user) { window.location.href = './index.html'; return; }
-    const ok = await requireAdmin(user);
-    if (!ok) { showAlert('No autorizado','error'); window.location.href = './client-dashboard.html'; return; }
     iniciarPanelAdmin();
   });
 
@@ -44,11 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const sidebar   = document.getElementById('sidebar');
   if (toggleBtn && sidebar) toggleBtn.addEventListener('click', () => sidebar.classList.toggle('active'));
 
-  if (window.lucide) lucide.createIcons();
+  if (window.lucide) window.lucide.createIcons();
 });
 
-// Logout (sidebar)
-document.getElementById('logoutSidebar')?.addEventListener('click', async e => {
+document.getElementById('logoutSidebar')?.addEventListener('click', async (e) => {
   e.preventDefault();
   try {
     await signOut(auth);
@@ -60,7 +35,6 @@ document.getElementById('logoutSidebar')?.addEventListener('click', async e => {
   }
 });
 
-// Botón cerrar popup asistencia (si existe en el DOM)
 document.getElementById('cerrarPopupBtn')?.addEventListener('click', cerrarPopup);
 
 /* ===== FullCalendar admin ===== */
@@ -74,39 +48,35 @@ function iniciarPanelAdmin() {
     headerToolbar: { left: '', center: 'title', right: '' },
 
     events(info, success, failure) {
-      const q = query(collection(db, 'reservations')); // sin filtros ⇒ no requiere índice
+      const q = query(collection(db, 'reservations'));
       onSnapshot(q, snap => {
-        const byDate = {};
-        snap.forEach(d => {
-          const data = d.data();
-          if (!data?.date) return;
-          byDate[data.date] ??= [];
-          byDate[data.date].push(data.nombre || 'Desconocido');
-        });
-        const evs = Object.entries(byDate).map(([date, names]) => ({
-          title: String(names.length),
-          start: date,
-          allDay: true,
-          extendedProps: { names }
-        }));
-        success(evs);
+        try {
+          const byDate = {};
+          snap.forEach(d => {
+            const data = d.data();
+            if (!data?.date) return;
+            byDate[data.date] ??= [];
+            byDate[data.date].push(data.nombre || 'Desconocido');
+          });
+          const evs = Object.entries(byDate).map(([date, names]) => ({
+            title: String(names.length),
+            start: date,
+            allDay: true,
+            extendedProps: { names }
+          })).filter(e => e.start >= info.startStr && e.start <= info.endStr);
+          success(evs);
+        } catch (err) { console.error(err); failure(err); }
       }, err => { console.error(err); failure(err); });
     },
 
     eventClick: async info => {
-      // Limpia tooltips rezagados
       document.querySelectorAll('.custom-tooltip').forEach(t => t.remove());
-
       const day = info.event.startStr;
       const list = await getReservasPorDia(day);
       abrirPopupAsistencia(list, day);
     },
 
     eventMouseEnter: info => {
-      // Si el modal está abierto, no muestres tooltip
-      const modalOpen = document.getElementById('asistenciaPopup')?.classList.contains('active');
-      if (modalOpen) return;
-
       const tip = document.createElement('div');
       tip.className = 'custom-tooltip';
       tip.style.cssText = 'position:fixed; z-index:10001; background:#0b2540; color:#b4d7ff; border:1px solid #1e3a5f; padding:6px 8px; border-radius:8px; pointer-events:none;';
@@ -119,10 +89,7 @@ function iniciarPanelAdmin() {
       info.el.addEventListener('click', cleanup);
     },
 
-    dayCellClassNames: arg => {
-      const d = arg.date.getDay();
-      return (d !== 5 && d !== 6) ? ['disabled-day'] : [];
-    }
+    dayCellClassNames: arg => (arg.date.getDay() !== 5 && arg.date.getDay() !== 6) ? ['disabled-day'] : []
   });
 
   calendar.render();
@@ -137,7 +104,6 @@ async function getReservasPorDia(day) {
     presente: d.data().presente || false
   }));
 }
-
 function abrirPopupAsistencia(list, day) {
   const popup = document.getElementById('asistenciaPopup');
   const ul    = document.getElementById('listaUsuarios');
@@ -166,7 +132,6 @@ function abrirPopupAsistencia(list, day) {
 
   popup.classList.add('active');
 }
-
 async function guardarAsistencia(day, uid, presente) {
   try {
     await updateDoc(doc(db, 'asistencias', day, 'usuarios', uid), { presente });
@@ -176,7 +141,6 @@ async function guardarAsistencia(day, uid, presente) {
     showAlert('Error al guardar asistencia', 'error');
   }
 }
-
 function cerrarPopup() {
   const popup = document.getElementById('asistenciaPopup');
   if (popup) popup.classList.remove('active');

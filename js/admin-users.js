@@ -6,8 +6,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
 
-/* ===== Admin fijo (maestro) ===== */
-const FIXED_ADMIN_UIDS = ["ScODWX8zq1ZXpzbbKk5vuHwSo7N2"]; // UID maestro
+import { gateAdmin } from './role-guard.js';
+await gateAdmin(); // redirige a client-dashboard si no es admin
+
 
 /* ===== Estado ===== */
 let USERS = [];     // cache lista

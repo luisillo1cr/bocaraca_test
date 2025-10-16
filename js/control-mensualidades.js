@@ -2,99 +2,52 @@
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import {
-  collection,
-  getDocs,
-  updateDoc,
-  doc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, getDocs, updateDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
+import { gateAdmin } from './role-guard.js';
 
-/* ========= Gate de administrador (UID maestro + rol admin) ========= */
-const FIXED_ADMINS = new Set([
-  "ScODWX8zq1ZXpzbbKk5vuHwSo7N2" // UID maestro
-]);
+await gateAdmin({ onDeny: 'client-dashboard.html' });
 
-async function getUserRoles(uid) {
-  try {
-    const s = await getDoc(doc(db, 'users', uid));
-    return s.exists() ? (s.data().roles || []) : [];
-  } catch { return []; }
-}
-async function requireAdmin(user) {
-  if (!user) return false;
-  if (FIXED_ADMINS.has(user.uid)) return true;
-  const roles = await getUserRoles(user.uid);
-  return roles.includes('admin');
-}
-
-/* ========= Estado de UI ========= */
-let usersCache = []; // [{id, nombre, correo, autorizado, expiryDate, ...}]
-
-// Helpers DOM para filtros (mismo naming que en usuarios)
+let usersCache = [];
 const $tbody  = () => document.querySelector('#mensualidades-table tbody');
-const $filter = () => document.getElementById('filterState'); // all|activo|proxima|vencida
-const $sort   = () => document.getElementById('sortBy');      // az|za
+const $filter = () => document.getElementById('filterState');
+const $sort   = () => document.getElementById('sortBy');
+const norm = s => (s ?? '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 
-// Normaliza strings para ordenar (sin acentos / case-insensitive)
-const norm = s => (s ?? '')
-  .toString()
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g,'')
-  .toLowerCase();
-
-/* ========= Boot ========= */
 document.addEventListener('DOMContentLoaded', () => {
   setupSidebarToggle();
 
   onAuthStateChanged(auth, async (user) => {
-    const ok = await requireAdmin(user);
-    if (!ok) { window.location.href = './index.html'; return; }
+    if (!user) { window.location.href = './index.html'; return; }
 
-    // Logout (sidebar)
-    const logoutBtn = document.getElementById('logoutSidebar');
-    logoutBtn?.addEventListener('click', async e => {
+    document.getElementById('logoutSidebar')?.addEventListener('click', async e => {
       e.preventDefault();
-      try {
-        await signOut(auth);
-        showAlert('Sesión cerrada', 'success');
-        setTimeout(() => window.location.href = 'index.html', 1000);
-      } catch {
-        showAlert('Error al cerrar sesión', 'error');
-      }
+      try { await signOut(auth); showAlert('Sesión cerrada','success'); setTimeout(()=>location.href='index.html', 1000); }
+      catch { showAlert('Error al cerrar sesión', 'error'); }
     });
 
-    // Carga inicial + enganchar filtros
     await loadMensualidades();
     $filter()?.addEventListener('change', renderMensualidades);
     $sort()?.addEventListener('change', renderMensualidades);
   });
 });
 
-/* ========= Sidebar toggle ========= */
 function setupSidebarToggle() {
   const btn = document.getElementById("toggleNav");
   const sb  = document.getElementById("sidebar");
   if (btn && sb) btn.addEventListener("click", () => sb.classList.toggle("active"));
 }
 
-/* ========= Helpers de fecha (CR) ========= */
 function todayCRDate() {
-  // Fecha “real” en Costa Rica (sin depender de TZ del dispositivo)
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Costa_Rica' }));
 }
-
 function daysUntil(expiryDateStr) {
   if (!expiryDateStr) return -9999;
   const today = todayCRDate();
   const [y, m, d] = expiryDateStr.split('-').map(Number);
   const expiry = new Date(y, m - 1, d, 23, 59, 59);
-  const diffMs = expiry - today;
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
 }
-
-/* ========= Estado de membresía ========= */
 function getMembershipState(user) {
   if (!user.autorizado) return 'Vencida';
   const exp = user.expiryDate;
@@ -104,8 +57,6 @@ function getMembershipState(user) {
   if (daysLeft <= 5) return 'Próxima a vencer';
   return 'Activo';
 }
-
-/* ========= Mapeo estado → clase CSS ========= */
 function stateToClass(state) {
   switch (state) {
     case 'Vencida':           return 'state-vencida';
@@ -115,43 +66,35 @@ function stateToClass(state) {
   }
 }
 
-/* ========= Carga inicial (DB -> cache) ========= */
 async function loadMensualidades() {
   const snap = await getDocs(collection(db, 'users'));
   usersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   renderMensualidades();
 }
-
-/* ========= Render con filtros/orden ========= */
 function renderMensualidades() {
   const tbody = $tbody();
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const stateFilter = $filter()?.value || 'all'; // all|activo|proxima|vencida
-  const order       = $sort()?.value   || 'az';  // az|za
+  const stateFilter = $filter()?.value || 'all';
+  const order       = $sort()?.value   || 'az';
 
-  // 1) derivar estado y filtrar
   let list = usersCache
     .map(u => ({ ...u, __state: getMembershipState(u) }))
     .filter(u => {
       if (stateFilter === 'activo')  return u.__state === 'Activo';
       if (stateFilter === 'proxima') return u.__state === 'Próxima a vencer';
       if (stateFilter === 'vencida') return u.__state === 'Vencida';
-      return true; // all
+      return true;
     });
 
-  // 2) ordenar por nombre
   list.sort((a, b) => {
-    const an = norm(a.nombre);
-    const bn = norm(b.nombre);
+    const an = norm(a.nombre), bn = norm(b.nombre);
     const cmp = an.localeCompare(bn);
     return order === 'za' ? -cmp : cmp;
   });
 
-  // 3) pintar filas
   const frag = document.createDocumentFragment();
-
   list.forEach(u => {
     const uid  = u.id;
     const exp  = u.expiryDate || '—';
@@ -170,57 +113,40 @@ function renderMensualidades() {
       </td>
       <td>${exp}</td>
       <td class="${cls}">${st}</td>
-      <td>
-        <input type="month" id="month-${uid}" value="${exp === '—' ? '' : exp.slice(0,7)}">
-      </td>
-      <td>
-        <button class="btnPay btn" data-uid="${uid}">Guardar</button>
-      </td>
+      <td><input type="month" id="month-${uid}" value="${exp==='—' ? '' : exp.slice(0,7)}"></td>
+      <td><button class="btnPay btn" data-uid="${uid}">Guardar</button></td>
     `;
     frag.appendChild(tr);
   });
-
   tbody.appendChild(frag);
 
-  // Delegación de eventos (optimiza listeners)
   tbody.onclick = async (e) => {
     const t = e.target;
 
-    // Toggle autorizado
     if (t.matches('input[type="checkbox"][data-uid]')) {
       const uid = t.getAttribute('data-uid');
       const checked = t.checked;
       try {
         await updateDoc(doc(db, 'users', uid), { autorizado: checked });
         showAlert('Autorización actualizada', 'success');
-        await loadMensualidades(); // asegura recalcular estados
+        await loadMensualidades();
       } catch {
         showAlert('Error al actualizar', 'error');
         t.checked = !checked;
       }
     }
 
-    // Guardar pago
     if (t.matches('.btnPay[data-uid]')) {
       const uid = t.getAttribute('data-uid');
-      const monthInput = document.getElementById(`month-${uid}`);
-      const monthVal = monthInput?.value || '';
+      const monthVal = document.getElementById(`month-${uid}`)?.value || '';
       if (!monthVal) { showAlert('Selecciona un mes', 'error'); return; }
-
-      // monthVal = "YYYY-MM" → último día del mes
       const [y, m] = monthVal.split('-').map(Number);
       const lastDay = new Date(y, m, 0).toISOString().split('T')[0];
-
       try {
-        await updateDoc(doc(db, 'users', uid), {
-          expiryDate: lastDay,
-          autorizado: true
-        });
+        await updateDoc(doc(db, 'users', uid), { expiryDate: lastDay, autorizado: true });
         showAlert('Pago registrado', 'success');
         await loadMensualidades();
-      } catch {
-        showAlert('Error al guardar pago', 'error');
-      }
+      } catch { showAlert('Error al guardar pago', 'error'); }
     }
   };
 }

@@ -89,40 +89,22 @@
 
   <script type="module" src="./js/usuarios.js"></script>
 
-  <script type="module">
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
-    import { app  } from './js/firebase-config.js';
-    import { setupInactivityTimeout } from './js/auth-timeout.js';
-
-    const auth = getAuth(app);
-
-    setupInactivityTimeout(); // por defecto 5 minutos
-    
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.href = './index.html';
-      } else {
-        console.log("Admin autenticado:", user.email);
-      }
-    });
-
-// Mostrar/ocultar navbar
-document.getElementById("toggleNav").addEventListener("click", () => {
-    document.getElementById("sidebar").classList.toggle("active");
-});
-
-  </script>
-
   <footer>
     <p>© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
   </footer>
 
+  <!-- GATE: Solo admin -->
+  <script type="module">
+    import { gateAdmin } from './js/role-guard.js';
+    await gateAdmin();
+  </script>
+
+  <!-- Lógica -->
+  <script type="module" src="./js/usuarios.js"></script>
+
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
-          .catch(console.error);
-      });
+      addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(console.error));
     }
   </script>
 

@@ -66,14 +66,20 @@
     <p>© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
   </footer>
 
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
-          .catch(console.error);
-      });
-    }
-  </script>
+<!-- GATE: Staff (admin o professor) -->
+<script type="module">
+  import { gateStaff } from './js/role-guard.js';
+  await gateStaff();
+</script>
+
+<!-- Lógica -->
+<script type="module" src="./js/marcar-asistencia.js"></script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(console.error));
+  }
+</script>
 
 </body>
 </html>

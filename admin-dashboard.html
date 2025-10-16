@@ -77,31 +77,17 @@
   <!-- Agrega esto en el head o justo antes de tu script admin.js -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-  <!-- EmailJS SDK (UMD) -->
-  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@2.6.4/dist/email.min.js"></script>
-  <script>
-    emailjs.init("TU_USER_ID_EMAILJS");  // ← reemplaza con tu User ID
-  </script>
-
   <!-- Después carga tu admin.js -->
   <script type="module" src="./js/admin.js"></script>
 
   <script type="module">
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
+    import { getAuth } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
     import { app } from './js/firebase-config.js';
     import { setupInactivityTimeout } from './js/auth-timeout.js';
     
     const auth = getAuth(app);
 
     setupInactivityTimeout(); // por defecto 5 minutos
-    
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.href = './index.html';
-      } else {
-        console.log("Admin autenticado:", user.email);
-      }
-    });
 
 // Mostrar/ocultar navbar
 document.getElementById("toggleNav").addEventListener("click", () => {
@@ -114,27 +100,32 @@ document.getElementById("toggleNav").addEventListener("click", () => {
     <p>© 2025 <a href="https://github.com/luisillo1cr" target="_blank">luisillo1cr</a>. Todos los derechos reservados.</p>
   </footer>
 
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js", { scope: "./" })
-        .then((reg) => {
-          if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
-          reg.addEventListener("updatefound", () => {
-            const nw = reg.installing;
-            if (!nw) return;
-            nw.addEventListener("statechange", () => {
-              if (nw.state === "installed" && navigator.serviceWorker.controller) {
-                reg.waiting?.postMessage("SKIP_WAITING");
-              }
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js", { scope: "./" })
+          .then((reg) => {
+            if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+            reg.addEventListener("updatefound", () => {
+              const nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener("statechange", () => {
+                if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                  reg.waiting?.postMessage("SKIP_WAITING");
+                }
+              });
             });
-          });
-        })
-        .catch(console.error);
-    });
-  }
-</script>
-<script type="module" src="./js/pwa-install.js"></script>
+          })
+          .catch(console.error);
+      });
+    }
+  </script>
+  <script type="module" src="./js/pwa-install.js"></script>
+
+  <script type="module">
+    import { gateAdmin } from './js/role-guard.js';
+    gateAdmin(); // si no es admin, lo manda a client-dashboard.html
+  </script>
 
 </body>
 </html>
