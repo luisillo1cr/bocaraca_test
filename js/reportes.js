@@ -1,21 +1,22 @@
 // ./js/reportes.js
+
 import { db } from "./firebase-config.js";
 import {
   collection,
   onSnapshot,
   query,
   orderBy,
-  getDocs,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-import { gateAdmin } from './role-guard.js';
-await gateAdmin(); // redirige a client-dashboard si no es admin
+//
+// ──────────────────────────────────────────────────────────────────────────────
+// UTILIDADES PARA RENDERIZAR
+// ──────────────────────────────────────────────────────────────────────────────
 
-/* ─────────────────────────────────────────────────────────────
-   UTILIDADES DE RENDER
-   ───────────────────────────────────────────────────────────── */
+// Genera el HTML de la tabla para una fecha concreta
 function generarTablaPorFecha(fecha, data) {
-  let html = `
+  let tableHTML = `
     <h3>Asistencia del ${fecha}</h3>
     <table class="asistencia-table">
       <thead>
@@ -27,196 +28,171 @@ function generarTablaPorFecha(fecha, data) {
       </thead>
       <tbody>
   `;
-  for (const u of data) {
-    html += `
+
+  data.forEach((user) => {
+    tableHTML += `
       <tr>
-        <td>${u.nombre ?? "—"}</td>
-        <td>${u.hora ?? "—"}</td>
-        <td>${u.presente ? "✅" : "❌"}</td>
+        <td>${user.nombre}</td>
+        <td>${user.hora}</td>
+        <td>${user.presente ? "✅" : "❌"}</td>
       </tr>
     `;
-  }
-  html += `
+  });
+
+  tableHTML += `
       </tbody>
     </table>
   `;
-  return html;
+  return tableHTML;
 }
 
+// Renderiza (o actualiza) la tabla de un día concreto en el DOM
 function renderizarTablaEnDOM(fecha, asistenciaData) {
   const container = document.getElementById("reporte-container");
-  if (!container) return;
-  const wrapperId = `tabla-${fecha.replace(/[^\w-]/g, "-")}`;
+  const wrapperId = `tabla-${fecha.replace(/:/g, "-")}`;
 
   let wrapper = document.getElementById(wrapperId);
-  if (!wrapper) {
+  if (wrapper) {
+    wrapper.innerHTML = generarTablaPorFecha(fecha, asistenciaData);
+  } else {
     wrapper = document.createElement("div");
     wrapper.id = wrapperId;
-    wrapper.classList.add("mb-4");
+    wrapper.classList.add("mb-4"); // margen inferior opcional
+    wrapper.innerHTML = generarTablaPorFecha(fecha, asistenciaData);
     container.appendChild(wrapper);
   }
-  wrapper.innerHTML = generarTablaPorFecha(fecha, asistenciaData);
 }
 
+// Elimina la tabla de una fecha (cuando deja de pertenecer al mes)
 function eliminarTablaDeDOM(fecha) {
-  const wrapperId = `tabla-${fecha.replace(/[^\w-]/g, "-")}`;
-  document.getElementById(wrapperId)?.remove();
+  const wrapperId = `tabla-${fecha.replace(/:/g, "-")}`;
+  const wrapper = document.getElementById(wrapperId);
+  if (wrapper) wrapper.remove();
 }
 
-/* ─────────────────────────────────────────────────────────────
-   ESTADO DE LISTENERS Y CACHE
-   ───────────────────────────────────────────────────────────── */
-let subUnsubsUsuarios = {};     // { fecha: () => void }
-let lastSigPorFecha   = {};     // { fecha: "hash" }
+//
+// ──────────────────────────────────────────────────────────────────────────────
+// LÓGICA EN TIEMPO REAL (MEZCLA getDocs PARA VERIFICAR Y onSnapshot PARA REFRESCAR)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Para guardar los listeners de cada subcolección “usuarios”
+let subUnsubsUsuarios = {};
+
+// Para el listener global de “asistencias”
 let unsubscribeAsistencias = null;
 
-/* Limpia TODOS los listeners y la UI */
-export function stopRealTimeReporting() {
-  Object.values(subUnsubsUsuarios).forEach(unsub => { try { unsub(); } catch {} });
-  subUnsubsUsuarios = {};
-  lastSigPorFecha = {};
-  try { unsubscribeAsistencias?.(); } catch {}
-  unsubscribeAsistencias = null;
-  const container = document.getElementById("reporte-container");
-  if (container) container.innerHTML = "";
-}
-
-/* Hash simple para evitar re-renders innecesarios */
-function firmaAsistencia(list) {
-  // Ordenamos por (hora,nombre) para obtener firma estable
-  const norm = (s) => (s ?? "").toString().toLowerCase();
-  const copy = [...list].sort((a, b) => {
-    const ha = norm(a.hora), hb = norm(b.hora);
-    if (ha < hb) return -1; if (ha > hb) return 1;
-    const na = norm(a.nombre), nb = norm(b.nombre);
-    return na.localeCompare(nb);
-  });
-  return JSON.stringify(copy.map(x => [x.nombre || "", x.hora || "", !!x.presente]));
-}
-
-/* Mostrar mensaje en el contenedor */
-function setContainerMessage(msg) {
-  const container = document.getElementById("reporte-container");
-  if (container) container.innerHTML = `<p>${msg}</p>`;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   TIEMPO REAL POR MES (YYYY y MM)
-   ───────────────────────────────────────────────────────────── */
+/**
+ * startRealTimeReporting(month)
+ *
+ * 1) Limpia el contenedor #reporte-container (para no mostrar datos viejos).
+ * 2) Hace un getDocs() puntual para ver si hay documentos en “asistencias”:
+ *    – Si no hay ninguno, muestra “No hay reportes para el mes seleccionado.”
+ *    – Si los hay, filtra los IDs que empiecen por “YYYY-MM” y los imprime en consola.
+ * 3) Sobre cada fecha filtrada, se suscribe con onSnapshot() a “asistencias/{fecha}/usuarios”:
+ *    – Cada cambio en esa subcolección renderiza (o actualiza) la tabla correspondiente.
+ * 4) Cancela automáticamente los listeners de fechas que ya no pertenezcan al mes seleccionado.
+ */
 export async function startRealTimeReporting(month) {
-  // month: "01".."12"
   const container = document.getElementById("reporte-container");
-  if (!container) return;
+  container.innerHTML = ""; // 1) Limpiar contenedor
 
-  // reset UI/listeners del intento anterior
-  stopRealTimeReporting();
-
-  // Año actual (con la estructura actual de IDs "YYYY-MM-DD" no podemos filtrar en servidor)
   const currentYear = new Date().getFullYear();
-  const prefijo = `${currentYear}-${String(month).padStart(2, "0")}`; // "YYYY-MM"
+  const prefijo = `${currentYear}-${month}`; // ej. "2025-06"
 
   try {
-    // 1) Cargar todas las fechas de 'asistencias' (IDs)
+    // 2) getDocs puntual para comprobar SI hay documentos en “asistencias”
     const asistenciasColl = collection(db, "asistencias");
     const snapshotAll = await getDocs(asistenciasColl);
-    const fechasDisponibles = snapshotAll.docs.map(d => d.id);
-    const fechasDelMes = fechasDisponibles.filter(f => f.startsWith(prefijo)).sort();
+    const fechasDisponibles = snapshotAll.docs.map((doc) => doc.id);
+    console.log("→ getDocs: fechas disponibles en Firestore:", fechasDisponibles);
 
-    if (!fechasDelMes.length) {
-      setContainerMessage("No hay reportes para el mes seleccionado.");
+    // Filtrar por mes actual (“YYYY-MM”)
+    const fechasDelMes = fechasDisponibles.filter((fecha) =>
+      fecha.startsWith(prefijo)
+    );
+    console.log(`→ Fechas que coinciden con ${prefijo}:`, fechasDelMes);
+
+    if (fechasDelMes.length === 0) {
+      container.innerHTML = `<p>No hay reportes para el mes seleccionado.</p>`;
       return;
     }
 
-    // 2) Suscribirse a cada subcolección usuarios (ordenada por hora, si existe)
-    for (const fecha of fechasDelMes) {
-      if (subUnsubsUsuarios[fecha]) continue;
+    // 3) SUBSCRIBIRSE A CADA subcolección “asistencias/{fecha}/usuarios”
+    fechasDelMes.forEach((fecha) => {
+      if (!subUnsubsUsuarios[fecha]) {
+        const usuariosRef = collection(db, "asistencias", fecha, "usuarios");
+        const qUsuarios = query(usuariosRef, orderBy("hora", "asc"));
 
-      const usuariosRef = collection(db, "asistencias", fecha, "usuarios");
-      // orderBy('hora') asume que existe; si en alguna fila falta, simplemente se ordena con "undefined" al inicio/fin
-      const qUsuarios = query(usuariosRef, orderBy("hora", "asc"));
-
-      subUnsubsUsuarios[fecha] = onSnapshot(
-        qUsuarios,
-        (usuariosSnap) => {
-          const asistenciaData = [];
-          usuariosSnap.forEach(docUser => {
-            const d = docUser.data() || {};
-            asistenciaData.push({ id: docUser.id, nombre: d.nombre, hora: d.hora, presente: !!d.presente });
-          });
-
-          const firma = firmaAsistencia(asistenciaData);
-          if (lastSigPorFecha[fecha] === firma) return; // sin cambios relevantes
-          lastSigPorFecha[fecha] = firma;
-
-          renderizarTablaEnDOM(fecha, asistenciaData);
-        },
-        (err) => {
-          console.error(`Error escuchando asistencias/${fecha}/usuarios:`, err);
-        }
-      );
-    }
-
-    // 3) Listener global para detectar altas/bajas de fechas y reajustar
-    unsubscribeAsistencias = onSnapshot(
-      asistenciasColl,
-      (snap) => {
-        const todasFechas = snap.docs.map(d => d.id);
-        const nuevasFechasDelMes = todasFechas.filter(f => f.startsWith(prefijo)).sort();
-
-        // Fechas a desuscribir (ya no pertenecen al mes)
-        for (const f of Object.keys(subUnsubsUsuarios)) {
-          if (!nuevasFechasDelMes.includes(f)) {
-            try { subUnsubsUsuarios[f](); } catch {}
-            delete subUnsubsUsuarios[f];
-            delete lastSigPorFecha[f];
-            eliminarTablaDeDOM(f);
-          }
-        }
-        // Fechas nuevas del mes (suscribirse)
-        nuevasFechasDelMes.forEach(fecha => {
-          if (!subUnsubsUsuarios[fecha]) {
-            const usuariosRef = collection(db, "asistencias", fecha, "usuarios");
-            const qUsuarios = query(usuariosRef, orderBy("hora", "asc"));
-            subUnsubsUsuarios[fecha] = onSnapshot(
-              qUsuarios,
-              (usuariosSnap) => {
-                const asistenciaData = [];
-                usuariosSnap.forEach(docUser => {
-                  const d = docUser.data() || {};
-                  asistenciaData.push({ id: docUser.id, nombre: d.nombre, hora: d.hora, presente: !!d.presente });
-                });
-                const firma = firmaAsistencia(asistenciaData);
-                if (lastSigPorFecha[fecha] === firma) return;
-                lastSigPorFecha[fecha] = firma;
-                renderizarTablaEnDOM(fecha, asistenciaData);
-              },
-              (err) => console.error(`Error RT en ${fecha}:`, err)
+        const unsubUsuarios = onSnapshot(
+          qUsuarios,
+          (usuariosSnap) => {
+            const asistenciaData = [];
+            usuariosSnap.forEach((docUser) => {
+              const data = docUser.data();
+              asistenciaData.push({ id: docUser.id, ...data });
+            });
+            console.log(`→ Datos de asistencia para ${fecha}:`, asistenciaData);
+            renderizarTablaEnDOM(fecha, asistenciaData);
+          },
+          (err) => {
+            console.error(
+              `Error escuchando subcolección usuarios de ${fecha}: `,
+              err
             );
           }
-        });
+        );
 
-        // Si no queda nada del mes, mensaje vacío
-        const hayAlgo = nuevasFechasDelMes.length > 0;
-        if (!hayAlgo) setContainerMessage("No hay reportes para el mes seleccionado.");
+        subUnsubsUsuarios[fecha] = unsubUsuarios;
+      }
+    });
+
+    // 4) CANCELAR listeners de fechas que ya no pertenezcan al mes
+    Object.keys(subUnsubsUsuarios).forEach((fechaRegistrada) => {
+      if (!fechasDelMes.includes(fechaRegistrada)) {
+        subUnsubsUsuarios[fechaRegistrada]();
+        delete subUnsubsUsuarios[fechaRegistrada];
+        eliminarTablaDeDOM(fechaRegistrada);
+      }
+    });
+
+    // 5) OPCIONAL: listener “global” en toda la colección asistencias, para detectar
+    //    si alguien crea/elimina un documento de fecha “{YYYY-MM-DD}” durante esta sesión.
+    //    (Si no lo necesitas, puedes comentar este bloque.)
+    if (unsubscribeAsistencias) unsubscribeAsistencias();
+    unsubscribeAsistencias = onSnapshot(
+      asistenciasColl,
+      (snapshotGlobal) => {
+        // Cada vez que cambie la colección “asistencias” entera, recargo el mes
+        const todasFechas = snapshotGlobal.docs.map((d) => d.id);
+        const fechasNuevasDelMes = todasFechas.filter((f) =>
+          f.startsWith(prefijo)
+        );
+        // Si detectamos que cambió la lista de fechasDelMes,
+        // reejecutamos esta función para refrescar listeners/tables:
+        if (
+          JSON.stringify(fechasNuevasDelMes.sort()) !==
+          JSON.stringify(fechasDelMes.sort())
+        ) {
+          console.log(
+            "→ Cambio detectado en colección asistencias; recargando mes."
+          );
+          startRealTimeReporting(month);
+        }
       },
       (err) => {
-        console.error("Error en listener global de 'asistencias':", err);
+        console.error("Error en listener global de asistencias: ", err);
       }
     );
   } catch (err) {
     console.error("❌ Error en startRealTimeReporting:", err);
-    setContainerMessage("Error al cargar los reportes. Revisa la consola.");
+    container.innerHTML = `<p>Error al cargar los reportes. Revisa la consola.</p>`;
   }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   ATÁJALO DESDE EL HTML (botón/selector)
-   ───────────────────────────────────────────────────────────── */
+// ──────────────────────────────────────────────────────────────────────────────
+// EXPONER getAsistencia AL GLOBAL
+// ──────────────────────────────────────────────────────────────────────────────
 window.getAsistencia = function () {
-  const sel = document.getElementById("monthSelect");
-  const month = sel?.value || String(new Date().getMonth() + 1).padStart(2, "0");
-  startRealTimeReporting(month);
+  const mes = document.getElementById("monthSelect").value; // ej. "06"
+  startRealTimeReporting(mes);
 };
-
-// (Opcional) expón el stop por si cambias de vista/pestaña
-window.stopRealTimeReporting = stopRealTimeReporting;

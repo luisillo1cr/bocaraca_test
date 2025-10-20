@@ -1,77 +1,95 @@
-// ./js/admin.js
+// ./js/admin.js (parches mínimos)
 import { auth, db } from './firebase-config.js';
-import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import {
-  collection, query, onSnapshot, getDocs, doc, updateDoc
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { collection, query, onSnapshot, getDocs, doc, updateDoc }
+  from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
-import { gateAdmin } from './role-guard.js';
+import { gateAdminPage } from './role-guard.js';
 
-// Gate único (sin loops)
-await gateAdmin({ onDeny: 'client-dashboard.html' });
+const onReady = (fn) => {
+  if (document.readyState !== 'loading') fn();
+  else document.addEventListener('DOMContentLoaded', fn);
+};
 
-document.addEventListener('DOMContentLoaded', () => {
-  onAuthStateChanged(auth, (user) => {
-    if (!user) { window.location.href = './index.html'; return; }
-    iniciarPanelAdmin();
-  });
-
+// Aca se registran los handlers y gateamos dentro
+onReady(() => {
+  // Sidebar toggle
   const toggleBtn = document.getElementById('toggleNav');
   const sidebar   = document.getElementById('sidebar');
-  if (toggleBtn && sidebar) toggleBtn.addEventListener('click', () => sidebar.classList.toggle('active'));
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      try { window.dispatchEvent(new Event('resize')); } catch {}
+    });
+  }
 
   if (window.lucide) window.lucide.createIcons();
-});
 
-document.getElementById('logoutSidebar')?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  try {
-    await signOut(auth);
-    showAlert("Has cerrado sesión", 'success');
-    setTimeout(() => window.location.href = './index.html', 900);
-  } catch (err) {
-    console.error('Error al cerrar sesión:', err);
-    showAlert('Hubo un problema al cerrar sesión.', 'error');
-  }
-});
+  document.getElementById('logoutSidebar')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      await signOut(auth);
+      showAlert('Has cerrado sesión', 'success');
+      setTimeout(() => location.href = './index.html', 900);
+    } catch {
+      showAlert('Hubo un problema al cerrar sesión.', 'error');
+    }
+  });
 
-document.getElementById('cerrarPopupBtn')?.addEventListener('click', cerrarPopup);
+  document.getElementById('cerrarPopupBtn')?.addEventListener('click', () => {
+    document.getElementById('asistenciaPopup')?.classList.remove('active');
+  });
+
+  // Gate por roles y luego calendario
+  (async () => {
+    await gateAdminPage();
+    iniciarPanelAdmin();
+  })();
+});
 
 /* ===== FullCalendar admin ===== */
 function iniciarPanelAdmin() {
   const calendarEl = document.getElementById('calendar-admin');
-  if (!calendarEl) return;
+  if (!calendarEl || !window.FullCalendar) return;
 
-  const calendar = new FullCalendar.Calendar(calendarEl, {
+  if (!calendarEl.style.minHeight) calendarEl.style.minHeight = '560px';
+
+  const calendar = new window.FullCalendar.Calendar(calendarEl, {
     locale: 'es',
     initialView: 'dayGridMonth',
+    height: 'auto',
+    expandRows: true,
+    contentHeight: 'auto',
     headerToolbar: { left: '', center: 'title', right: '' },
 
     events(info, success, failure) {
       const q = query(collection(db, 'reservations'));
-      onSnapshot(q, snap => {
+      const unsub = onSnapshot(q, snap => {
         try {
           const byDate = {};
           snap.forEach(d => {
             const data = d.data();
             if (!data?.date) return;
-            byDate[data.date] ??= [];
-            byDate[data.date].push(data.nombre || 'Desconocido');
+            (byDate[data.date] ??= []).push(data.nombre || 'Desconocido');
           });
-          const evs = Object.entries(byDate).map(([date, names]) => ({
-            title: String(names.length),
-            start: date,
-            allDay: true,
-            extendedProps: { names }
-          })).filter(e => e.start >= info.startStr && e.start <= info.endStr);
+          const evs = Object.entries(byDate)
+            .map(([date, names]) => ({
+              title: String(names.length),
+              start: date,
+              allDay: true,
+              extendedProps: { names }
+            }));
+          // ❗ NO filtres por rango aquí (ver punto 2)
           success(evs);
         } catch (err) { console.error(err); failure(err); }
       }, err => { console.error(err); failure(err); });
+
+      return () => { try { unsub(); } catch {} };
     },
 
     eventClick: async info => {
       document.querySelectorAll('.custom-tooltip').forEach(t => t.remove());
-      const day = info.event.startStr;
+      const day  = info.event.startStr;
       const list = await getReservasPorDia(day);
       abrirPopupAsistencia(list, day);
     },
@@ -79,20 +97,24 @@ function iniciarPanelAdmin() {
     eventMouseEnter: info => {
       const tip = document.createElement('div');
       tip.className = 'custom-tooltip';
-      tip.style.cssText = 'position:fixed; z-index:10001; background:#0b2540; color:#b4d7ff; border:1px solid #1e3a5f; padding:6px 8px; border-radius:8px; pointer-events:none;';
+      tip.style.cssText =
+        'position:fixed; z-index:10001; background:#0b2540; color:#b4d7ff; border:1px solid #1e3a5f; padding:6px 8px; border-radius:8px; pointer-events:none;';
       tip.innerHTML = `<strong>Usuarios:</strong><br>${(info.event.extendedProps.names||[]).join('<br>')}`;
       document.body.appendChild(tip);
-      const move = e => { tip.style.left = `${e.pageX+10}px`; tip.style.top  = `${e.pageY+10}px`; };
+      const move = e => { tip.style.left = `${e.pageX+10}px`; tip.style.top = `${e.pageY+10}px`; };
       const cleanup = () => tip.remove();
       info.el.addEventListener('mousemove', move);
       info.el.addEventListener('mouseleave', cleanup);
       info.el.addEventListener('click', cleanup);
     },
 
-    dayCellClassNames: arg => (arg.date.getDay() !== 5 && arg.date.getDay() !== 6) ? ['disabled-day'] : []
+    dayCellClassNames: arg =>
+      (arg.date.getDay() !== 5 && arg.date.getDay() !== 6) ? ['disabled-day'] : []
   });
 
   calendar.render();
+  setTimeout(() => { try { calendar.updateSize(); } catch {} }, 0);
+  window.addEventListener('resize', () => { try { calendar.updateSize(); } catch {} });
 }
 
 /* ===== Asistencia ===== */
@@ -104,6 +126,7 @@ async function getReservasPorDia(day) {
     presente: d.data().presente || false
   }));
 }
+
 function abrirPopupAsistencia(list, day) {
   const popup = document.getElementById('asistenciaPopup');
   const ul    = document.getElementById('listaUsuarios');
@@ -132,6 +155,7 @@ function abrirPopupAsistencia(list, day) {
 
   popup.classList.add('active');
 }
+
 async function guardarAsistencia(day, uid, presente) {
   try {
     await updateDoc(doc(db, 'asistencias', day, 'usuarios', uid), { presente });
@@ -140,8 +164,4 @@ async function guardarAsistencia(day, uid, presente) {
     console.error(err);
     showAlert('Error al guardar asistencia', 'error');
   }
-}
-function cerrarPopup() {
-  const popup = document.getElementById('asistenciaPopup');
-  if (popup) popup.classList.remove('active');
 }

@@ -43,6 +43,7 @@ function setupInactivityTimeout(minutes = 3) {
       showToast("Tu sesión se cerrará pronto por inactividad.", "error");
 
       // El toast dura 2 segundos, pero showToast ya lo elimina en 4s,
+      // si quieres 2s exacto podríamos ajustar showToast o eliminar manualmente
     }, warningTime);
 
     inactivityTimer = setTimeout(() => {

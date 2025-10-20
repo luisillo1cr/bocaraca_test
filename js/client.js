@@ -1,4 +1,4 @@
-// ./js/client.js
+// ./js/client.js — Student/Professor dual render + flip + admin-like staff view + RT + loader (+tooltip fix)
 import { auth, db } from './firebase-config.js';
 import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
@@ -15,10 +15,6 @@ import {
   updateDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
-
-import { gateAuthed } from './role-guard.js';
-await gateAuthed(); // redirige a index si no hay sesión
-
 
 /* ───────── Estado ───────── */
 let calStudent = null;
@@ -84,6 +80,7 @@ window.hideLoader = hideLoader;
     #attModal .att-item{ display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid #233140; border-radius:10px; background:#0f1720; }
     #attModal .close-btn{ padding:8px 12px; border-radius:10px; background:#1f2937; border:1px solid #334155; color:#e5e7eb; cursor:pointer; }
 
+    /* que los números del conteo se vean fuertes, como en admin */
     .fc-daygrid-event .fc-event-title{ font-weight:800; }
   `;
   document.head.appendChild(s);
@@ -115,6 +112,13 @@ function isDateInCurrentMonthCR(dateStr){
   const [y,m]=dateStr.split('-').map(Number);
   return y===cy && m===cm;
 }
+function isDateNotPastCR(dateStr){
+  const {year:cy,month:cm,day:cd}=getTodayCRParts();
+  const [y,m,d]=dateStr.split('-').map(Number);
+  if(y<cy) return false; if(y>cy) return true;
+  if(m<cm) return false; if(m>cm) return true;
+  return d>=cd;
+}
 function nowCRString(){
   const d = new Intl.DateTimeFormat('en-CA',{ timeZone: CR_TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
   const t = new Intl.DateTimeFormat('en-GB',{ timeZone: CR_TZ, hour:'2-digit', minute:'2-digit', hour12:false }).format(new Date());
@@ -135,7 +139,7 @@ function canBook(dateStr, timeStr){
   }
   return { ok:true };
 }
-/* Cancelar: solo si aún no empieza */
+/* Cancelar: solo si aún no empieza (estrictamente antes del inicio) */
 function canCancel(dateStr, timeStr){
   const {date:today, time:nowT} = nowCRString();
   const now  = crDateTime(today, nowT);
@@ -143,7 +147,7 @@ function canCancel(dateStr, timeStr){
   return (slot - now) > 0;
 }
 
-/* ───── Contenedores ───── */
+/* ───── Contenedores de ambos calendarios ───── */
 function ensureCalendarHolders(){
   const card = document.querySelector('.calendar-wrapper .card');
   if (!card) return null;
@@ -162,7 +166,7 @@ function ensureCalendarHolders(){
   if (!sHold){
     sHold = document.createElement('div');
     sHold.id = 'calStudentHolder';
-    sHold.className = 'calendar-pane visible'; // default visible; luego ajustamos
+    sHold.className = 'calendar-pane visible';
     shell.appendChild(sHold);
   }
   if (!aHold){
@@ -174,7 +178,7 @@ function ensureCalendarHolders(){
   return { shell, sHold, aHold };
 }
 
-/* ───── Popup asistencia ───── */
+/* ───── Popup asistencia (inyectado) ───── */
 function ensureAttendancePopup(){
   if (document.getElementById('attModal')) return;
   const m = document.createElement('div');
@@ -191,15 +195,18 @@ function ensureAttendancePopup(){
   document.body.appendChild(m);
   m.querySelector('#attClose').onclick = () => {
     m.classList.remove('active');
-    killTooltips();
+    killTooltips(); // limpiar tooltips al cerrar
   };
 }
+
+/* ─── Mata-tooltips (para evitar que queden detrás del modal) ─── */
 function killTooltips() {
   document.querySelectorAll('.custom-tooltip').forEach(el => el.remove());
 }
 
 /* ───── Boot ───── */
 document.addEventListener('DOMContentLoaded', () => {
+  // Sidebar + logout
   const toggleBtn = document.getElementById("toggleNav");
   const sidebar   = document.getElementById("sidebar");
   if (toggleBtn && sidebar) toggleBtn.addEventListener("click", () => sidebar.classList.toggle("active"));
@@ -214,26 +221,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   onAuthStateChanged(auth, async user => {
-    if (!user) { location.href = './index.html'; return; }
+    if (!user) { location.href='./index.html'; return; }
 
-    // Código de asistencia del usuario
+    // código de asistencia
     const codeEl = document.getElementById('attendanceCodeDisplay');
     if (codeEl) {
       try {
-        const s = await getDoc(doc(db,'users',user.uid));
-        codeEl.textContent = `Tu código de asistencia: ${s.exists() ? (s.data().attendanceCode || '—') : '—'}`;
+        const snap = await getDoc(doc(db,'users',user.uid));
+        codeEl.textContent = `Tu código de asistencia: ${snap.exists() ? (snap.data().attendanceCode || '—') : '—'}`;
       } catch { codeEl.textContent='Error al cargar el código.'; }
     }
 
-    // Reloj CR
+    // reloj CR
     const localTimeEl = document.getElementById('local-time');
     if (localTimeEl) {
-      const fmt = new Intl.DateTimeFormat('es-CR',{hour:'numeric',minute:'numeric',second:'numeric',hour12:true,timeZone: 'America/Costa_Rica'});
+      const fmt = new Intl.DateTimeFormat('es-CR',{hour:'numeric',minute:'numeric',second:'numeric',hour12:true,timeZone: CR_TZ});
       const tick=()=>localTimeEl.textContent=`Hora en Costa Rica: ${fmt.format(new Date())}`;
       tick(); setInterval(tick,1000);
     }
 
-    // Roles (ya asegurado el perfil vía gateAuthed en el encabezado del archivo)
+    // roles
     let roles = [];
     try {
       const u = await getDoc(doc(db,'users',user.uid));
@@ -242,24 +249,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const holders = ensureCalendarHolders();
     if (!holders) return;
+
+    // switch solo si tiene ambos
+    const hasBoth = roles.includes('student') && roles.includes('professor');
+    if (hasBoth) buildModeSwitch(holders.shell);
+
+    // popup estilo admin
     ensureAttendancePopup();
 
-    const isStudent   = roles.includes('student');
-    const isProfessor = roles.includes('professor');
-    const hasBoth     = isStudent && isProfessor;
-
+    // levantar ambos calendarios (siempre)
     buildStudentCalendar(holders.sHold);
     buildStaffCalendar(holders.aHold);
 
-    if (hasBoth){
-      buildModeSwitch(holders.shell);
-      holders.sHold.classList.add('visible');
-      holders.aHold.classList.add('hidden');
-    } else if (isProfessor && !isStudent) {
-      holders.sHold.classList.add('hidden');
-      holders.aHold.classList.remove('hidden'); holders.aHold.classList.add('visible');
-      calStaff?.updateSize();
-    } else {
+    if (!hasBoth){
       holders.sHold.classList.add('visible');
       holders.aHold.classList.add('hidden');
     }
@@ -319,12 +321,10 @@ function buildStudentCalendar(holder){
   if (calStudent){ try{calStudent.destroy();}catch{} calStudent=null; }
   holder.innerHTML='';
 
-  const CR = 'America/Costa_Rica';
-
   calStudent = new FullCalendar.Calendar(holder, {
     locale:'es',
     initialView:'dayGridMonth',
-    timeZone: CR,
+    timeZone: CR_TZ,
     headerToolbar:{ left:'', center:'title', right:'' },
     height:'auto', contentHeight:'auto', expandRows:true, handleWindowResize:true,
 
@@ -349,7 +349,7 @@ function buildStudentCalendar(holder){
       const dateStr = info.dateStr;
       const dow = info.date.getUTCDay();
       if(!isDateInCurrentMonthCR(dateStr)){ showAlert('Solo puedes reservar en el mes actual.','error'); return; }
-      if(dow!==5 && d!==6){ showAlert('Solo viernes y sábados.','error'); return; }
+      if(dow!==5 && dow!==6){ showAlert('Solo viernes y sábados.','error'); return; }
 
       const classTime = (dow===5) ? '20:30' : '09:00';
       const check = canBook(dateStr, classTime);
@@ -380,7 +380,7 @@ function buildStudentCalendar(holder){
   requestAnimationFrame(()=>{ calStudent.render(); setTimeout(()=>calStudent.updateSize(), 40); });
 }
 
-/* ───── Calendario: Profesor (cuenta por día + modal asistencia) ───── */
+/* ───── Calendario: Profesor (apariencia/UX de admin.js) ───── */
 function buildStaffCalendar(holder){
   ensureAttendancePopup();
 
@@ -388,17 +388,15 @@ function buildStaffCalendar(holder){
   if (calStaff){ try{calStaff.destroy();}catch{} calStaff=null; }
   holder.innerHTML='';
 
-  const CR = 'America/Costa_Rica';
-
   calStaff = new FullCalendar.Calendar(holder, {
     locale:'es',
     initialView:'dayGridMonth',
-    timeZone: CR,
+    timeZone: CR_TZ,
     headerToolbar:{ left:'', center:'title', right:'' },
     height:'auto', contentHeight:'auto', expandRows:true, handleWindowResize:true,
 
     events(info, success, failure){
-      const qAll = query(collection(db,'reservations')); // sin filtros ⇒ sin índice extra
+      const qAll = query(collection(db,'reservations')); // sin filtros ⇒ sin índice
       unsubStaff = onSnapshot(qAll, snap=>{
         try{
           const byDate = {};
@@ -422,7 +420,7 @@ function buildStaffCalendar(holder){
       return () => unsubStaff && unsubStaff();
     },
 
-    // Tooltips seguros (se apagan si el modal está abierto)
+    // Evita tooltips cuando el modal esté visible y límpialos al hacer click
     eventMouseEnter: info => {
       const modalActive = document.getElementById('attModal')?.classList.contains('active');
       if (modalActive) return;
@@ -440,7 +438,7 @@ function buildStaffCalendar(holder){
     },
 
     eventClick: async info => {
-      killTooltips();
+      killTooltips(); // limpiar por si quedó alguno
       const day = info.event.startStr;
       const list = await getReservasPorDia(day);
       openAttendancePopup(list, day);
@@ -460,15 +458,11 @@ async function addReservation(date, time){
     if (!userDoc.exists()){ showAlert('Perfil no encontrado.','error'); return null; }
     const u = userDoc.data();
 
-    // Guardamos un timestamp del slot para que las reglas apliquen (slotTs opcional)
-    const slotTs = new Date(`${date}T${time}:00-06:00`).getTime();
-
     const docRef = await addDoc(collection(db,'reservations'), {
       date, time,
       userId: auth.currentUser.uid,
       user: auth.currentUser.email,
-      nombre: u.nombre,
-      slotTs
+      nombre: u.nombre
     });
 
     await setDoc(doc(db,'asistencias',date), { creadaEl: Date.now() }, { merge:true });
@@ -518,6 +512,7 @@ function openConfirmReservationModal(date, time){
 
   document.getElementById('confirmBtn').onclick = async () => {
     try{
+      // Doble verificación por si pasa tiempo entre abrir y confirmar
       const check = canBook(date, time);
       if (!check.ok){
         if (check.reason === 'lt1h'){
@@ -569,13 +564,13 @@ function openDeleteReservationModal(resId, date, time){
 }
 function closeModal(){ const m=document.querySelector('.custom-modal'); if (m) m.remove(); }
 
-/* ───── Profesor/Admin: asistencia ───── */
+/* ───── Profesor/Admin: asistencia (idéntico a admin.js) ───── */
 async function getReservasPorDia(day){
   const snap = await getDocs(collection(db,'asistencias',day,'usuarios'));
   return snap.docs.map(d=>({ uid:d.id, nombre:d.data().nombre, presente:d.data().presente || false }));
 }
 function openAttendancePopup(list, day){
-  killTooltips();
+  killTooltips(); // ← quita cualquier tooltip vivo
   const m = document.getElementById('attModal');
   const l = document.getElementById('attList');
   const d = document.getElementById('attDate');
@@ -599,6 +594,7 @@ function openAttendancePopup(list, day){
   });
   m.classList.add('active');
 }
+function cerrarPopup(){ const p=document.getElementById('attModal'); if(p) p.classList.remove('active'); }
 
 /* ───── Logout rojo (si existe) ───── */
 const logoutBtn = document.getElementById('logoutBtn');

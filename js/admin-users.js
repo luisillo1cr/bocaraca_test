@@ -1,22 +1,24 @@
 // ./js/admin-users.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import {
-  collection, onSnapshot, doc, updateDoc, getDoc
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, onSnapshot, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
+import { gateAdminPage } from './role-guard.js';
 
-import { gateAdmin } from './role-guard.js';
-await gateAdmin(); // redirige a client-dashboard si no es admin
+// Gate único (sin loops)
+await gateAdminPage();
 
+// Admins fijos (blindados para edición)
+const FIXED_ADMIN_UIDS = [
+  "BTHOAu55O9QoAG1dB4eEgucXRet1",
+  "JIA3ge7fFLMfrMH9Yyg6Av4OliI2"
+];
 
-/* ===== Estado ===== */
-let USERS = [];     // cache lista
-let ME = null;      // mi doc users/{uid}
+let USERS = [];
+let ME = null;
 let myUid = null;
-let I_AM_ADMIN = false;
 
-/* ===== Navbar: hamburguesa + logout ===== */
+// ========== Navbar: hamburguesa + logout ==========
 const toggleBtn = document.getElementById("toggleNav");
 const sidebar   = document.getElementById("sidebar");
 toggleBtn?.addEventListener("click", () => sidebar?.classList.toggle("active"));
@@ -32,7 +34,7 @@ document.getElementById("logoutSidebar")?.addEventListener("click", async (e) =>
   }
 });
 
-/* ===== Helpers UI ===== */
+// ========== Helpers ==========
 const listEl  = document.getElementById('list');
 const emptyEl = document.getElementById('empty');
 const totalEl = document.getElementById('total');
@@ -51,9 +53,12 @@ function initialsFrom(name='', mail='') {
 }
 function hasRole(u, r){ return Array.isArray(u.roles) && u.roles.includes(r); }
 function isFixed(uid){ return FIXED_ADMIN_UIDS.includes(uid); }
-function iAmAdmin(){ return I_AM_ADMIN; }
+function iAmAdmin() {
+  const roles = ME?.roles || [];
+  return roles.includes('admin') || FIXED_ADMIN_UIDS.includes(myUid);
+}
 
-/* ===== Filtros ===== */
+// ========== Filtros ==========
 function applyFilters() {
   const n = (fNombre?.value || '').toLowerCase().trim();
   const c = (fCedula?.value || '').trim();
@@ -77,7 +82,7 @@ function applyFilters() {
   el?.addEventListener('change', applyFilters);
 });
 
-/* ===== Render ===== */
+// ========== Render ==========
 function renderList(items) {
   listEl.innerHTML = '';
   totalEl.textContent = `${items.length} usuario${items.length===1?'':'s'}`;
@@ -91,7 +96,7 @@ function renderList(items) {
     card.className = 'card';
     card.dataset.uid = u.uid;
 
-    // fila 1 — identidad + badges
+    // fila 1
     const row1 = document.createElement('div');
     row1.className = 'row1';
 
@@ -118,7 +123,7 @@ function renderList(items) {
 
     row1.append(identity, badges);
 
-    // fila 2 — selector de roles + guardar
+    // fila 2: chips + guardar
     const row2 = document.createElement('div');
     row2.style.display = 'grid';
     row2.style.gap = '10px';
@@ -169,7 +174,7 @@ function renderList(items) {
     actions.appendChild(save);
     row2.append(rolesBox, actions);
 
-    // fila 3 — info extra
+    // fila 3: info
     const row3 = document.createElement('div');
     row3.style.display = 'grid';
     row3.style.gap = '6px';
@@ -185,37 +190,20 @@ function renderList(items) {
   listEl.appendChild(frag);
 }
 
-/* ===== Auth / Carga ===== */
+// ========== Auth / Carga ==========
 onAuthStateChanged(auth, async (user) => {
   if (!user) { location.href = 'index.html'; return; }
   myUid = user.uid;
 
-  // 1) Custom claims (si existen)
-  let claimAdmin = false;
-  try {
-    const token = await user.getIdTokenResult(true);
-    claimAdmin = !!token?.claims?.admin;
-  } catch { /* ignore */ }
-
-  // 2) Mi doc users/{uid}
   const meSnap = await getDoc(doc(db,'users', user.uid));
   ME = meSnap.exists() ? meSnap.data() : null;
-
-  // 3) Decidir si soy admin
-  I_AM_ADMIN = claimAdmin || FIXED_ADMIN_UIDS.includes(myUid) || (ME?.roles || []).includes('admin');
-
-  // Gateo: si no soy admin => dashboard cliente
-  if (!I_AM_ADMIN) {
-    location.href = 'client-dashboard.html';
-    return;
-  }
 
   // Mostrar ítems "admin-only" del sidebar
   document.querySelectorAll('.sidebar .admin-only').forEach(li => li.style.display = 'list-item');
 
   // Listado en tiempo real
   onSnapshot(collection(db,'users'), (snap) => {
-    USERS = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
+    USERS = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
     USERS.forEach(u => { if (!u.createdAt) u.createdAt = ''; });
     applyFilters();
   }, (err) => {

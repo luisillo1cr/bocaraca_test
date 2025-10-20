@@ -1,42 +1,72 @@
 // ./js/admin-events.js
 import { auth, db, app } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
-  collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, getDoc
+  collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, getDoc, serverTimestamp, orderBy, query
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 import Cropper from 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.esm.js';
 import { showAlert } from './showAlert.js';
+import { gateAdminPage } from './role-guard.js';
 
-import { gateAdmin } from './role-guard.js';
-await gateAdmin(); // redirige a client-dashboard si no es admin
+/* ===== helpers DOM/nav (mismo patrón que ya usamos) ===== */
+const ready = (fn)=>
+  (document.readyState === 'loading')
+    ? document.addEventListener('DOMContentLoaded', fn, { once:true })
+    : fn();
 
-
-document.addEventListener('DOMContentLoaded', async () => {
-  // Guard fuerte (evita loops: niega -> client-dashboard)
-  const ok = await gateAdmin();
-  if (!ok) return;
-
-  // Sidebar toggle
-  const toggleBtn = document.getElementById('toggleNav');
-  const sidebar   = document.getElementById('sidebar');
-  toggleBtn?.addEventListener('click', () => sidebar?.classList.toggle('active'));
-
-  // Logout
-  document.getElementById('logoutSidebar')?.addEventListener('click', async e => {
+function ensureNavCSS(){
+  if (document.getElementById('nav-fallback-css')) return;
+  const style = document.createElement('style');
+  style.id = 'nav-fallback-css';
+  style.textContent = `
+    .hamburger-btn{position:fixed;right:16px;top:16px;z-index:10001}
+    .sidebar{position:fixed;inset:0 auto 0 0;width:260px;height:100vh;
+             transform:translateX(-100%);transition:transform .25s ease;z-index:10000}
+    .sidebar.active{transform:translateX(0)}
+  `;
+  document.head.appendChild(style);
+}
+function bindSidebarOnce(){
+  const btn = document.getElementById('toggleNav');
+  const sb  = document.getElementById('sidebar');
+  if (!btn || !sb || btn.dataset.bound) return;
+  btn.addEventListener('click', ()=> sb.classList.toggle('active'));
+  btn.dataset.bound = '1';
+}
+function bindLogoutOnce(){
+  const a = document.getElementById('logoutSidebar');
+  if (!a || a.dataset.bound) return;
+  a.addEventListener('click', async (e)=>{
     e.preventDefault();
-    try { await signOut(auth); showAlert('Has cerrado sesión','success'); setTimeout(()=>location.replace('index.html'), 900); }
+    try { await signOut(auth); showAlert('Has cerrado sesión','success'); setTimeout(()=>location.href='index.html', 900); }
     catch { showAlert('Error al cerrar sesión','error'); }
   });
+  a.dataset.bound = '1';
+}
 
+/* ===== init protegido NO bloqueante ===== */
+ready(() => {
+  ensureNavCSS();
+  bindSidebarOnce();
+  bindLogoutOnce();
+  if (window.lucide) { try { window.lucide.createIcons(); } catch {} }
+
+  // Gate sin frenar el shell (si no es admin, role-guard redirige)
+  gateAdminPage()
+    .then(initProtected)
+    .catch(()=>{/* role-guard se encarga de redirigir */});
+});
+
+async function initProtected(){
   const form      = document.getElementById('eventForm');
   const tblBody   = document.getElementById('eventsTbody');
   const cancelBtn = document.getElementById('cancelBtn');
   if (!form || !tblBody || !cancelBtn) return;
 
-  // === Cropper / Storage ===
+  /* ====== Cropper/Storage ====== */
   const imageFileInput = document.getElementById('imageFile');
   const cropperModal   = document.getElementById('cropperModal');
   const cropperImage   = document.getElementById('cropperImage');
@@ -58,54 +88,53 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   cropBtn?.addEventListener('click', () => {
     if (!cropper || !rawFile) return;
-    const canvas = cropper.getCroppedCanvas({ width: 500, height: 500 });
+    const canvas = cropper.getCroppedCanvas({ width: 800, height: 800 });
     canvas.toBlob(async blob => {
       try {
-        const filename = `events/${Date.now()}_${rawFile.name}`;
+        const filename = `events/${Date.now()}_${(rawFile.name||'img').replace(/\s+/g,'_')}`;
         const ref = storageRef(storage, filename);
         await uploadBytes(ref, blob);
         const url = await getDownloadURL(ref);
         document.getElementById('imageUrl').value = url;
-        showAlert('Imagen recortada y subida', 'success');
+        showAlert('Imagen recortada y subida','success');
       } catch (err) {
-        console.error(err); showAlert('Error al subir imagen', 'error');
+        console.error(err);
+        showAlert('Error al subir imagen','error');
       } finally {
-        cropper?.destroy(); cropper = null; cropperModal.classList.remove('active');
+        cropper?.destroy(); cropper=null; cropperModal.classList.remove('active');
       }
-    }, rawFile.type);
+    }, rawFile.type || 'image/jpeg');
   });
 
-  // Quill
+  /* ====== Quill ====== */
   const quill = new Quill('#descriptionEditor', {
     theme: 'snow',
     modules: { toolbar: [['bold','italic','underline','strike'],[{list:'ordered'},{list:'bullet'}],['link','image']] }
   });
   const hiddenDesc = document.getElementById('description');
 
-  // Fechas bonitas
-  function formatDateStr(dateStr){
-    const [y,m,d] = dateStr.split('-').map(Number);
-    const dt = new Date(y, m-1, d);
-    return new Intl.DateTimeFormat('es-CR',{weekday:'long',day:'numeric',month:'long'})
-      .format(dt).replace(/^\w/, c=>c.toUpperCase());
-  }
-
-  let editingId = null;
   const fields = ['title','imageUrl','from','to','description','ticketsUrl'];
+  let editingId = null;
 
-  // Crear/Actualizar
+  /* ====== Crear/Actualizar ====== */
   form.addEventListener('submit', async e => {
     e.preventDefault();
     hiddenDesc.value = quill.root.innerHTML;
+
     const data = {
       title: document.getElementById('title').value.trim(),
       imageUrl: document.getElementById('imageUrl').value.trim(),
-      from: document.getElementById('from').value,
+      from: document.getElementById('from').value, // YYYY-MM-DD
       to: document.getElementById('to').value,
       description: hiddenDesc.value,
       ticketsUrl: document.getElementById('ticketsUrl').value.trim(),
-      createdAt: Date.now()
+      createdAt: serverTimestamp()
     };
+
+    if (!data.title || !data.from || !data.to){
+      showAlert('Completa título y fechas','error'); return;
+    }
+
     try {
       if (editingId) {
         await updateDoc(doc(db,'events',editingId), data);
@@ -115,26 +144,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         showAlert('Evento creado','success');
       }
       editingId = null; form.reset(); quill.setContents([]);
-    } catch (err) { console.error(err); showAlert('Error guardando evento','error'); }
+    } catch (err) {
+      console.error('Error guardando evento:', err);
+      showAlert('Error guardando evento (revisa reglas de Firestore)','error');
+    }
   });
 
-  cancelBtn.addEventListener('click', () => { editingId = null; form.reset(); quill.setContents([]); });
+  cancelBtn.addEventListener('click', () => {
+    editingId = null; form.reset(); quill.setContents([]);
+  });
 
-  // Tabla RT
-  onSnapshot(collection(db,'events'), snap => {
+  /* ====== Tabla realtime ====== */
+  const q = query(collection(db,'events'), orderBy('from','desc'));
+  onSnapshot(q, snap => {
     tblBody.innerHTML = '';
     snap.forEach(s => {
       const e = s.data(), id = s.id;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${e.title||''}</td>
-        <td><div class="date-range"><span>${formatDateStr(e.from)}</span><span class="arrow">→</span><span>${formatDateStr(e.to)}</span></div></td>
+        <td>
+          <div class="date-range">
+            <span>${formatDateStr(e.from||'')}</span>
+            <span class="arrow">→</span>
+            <span>${formatDateStr(e.to||'')}</span>
+          </div>
+        </td>
         <td>
           <button class="btn small" data-id="${id}" data-action="edit">✏️</button>
           <button class="btn small error" data-id="${id}" data-action="del">🗑️</button>
         </td>`;
       tblBody.appendChild(tr);
     });
+  }, err => {
+    console.error('Snapshot error eventos:', err);
+    showAlert('No se pudieron cargar los eventos','error');
   });
 
   // Delegación Edit/Del
@@ -154,7 +198,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         await deleteDoc(doc(db,'events',id));
         showAlert('Evento borrado','success');
         if (editingId===id){ editingId=null; form.reset(); quill.setContents([]); }
-      } catch (err) { console.error(err); showAlert('Error eliminando evento','error'); }
+      } catch (err) {
+        console.error(err);
+        showAlert('Error eliminando evento (revisa reglas de Firestore)','error');
+      }
     }
   });
-});
+}
+
+/* ====== util ====== */
+function formatDateStr(dateStr){
+  if (!dateStr) return '—';
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, (m||1)-1, d||1);
+  try {
+    return new Intl.DateTimeFormat('es-CR',{weekday:'long',day:'numeric',month:'long'})
+      .format(dt).replace(/^\w/, c=>c.toUpperCase());
+  } catch { return dateStr; }
+}

@@ -1,58 +1,22 @@
 // ./js/marcar-asistencia.js
 import { auth, db } from './firebase-config.js';
-import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import {
-  collection, query, where, getDocs,
-  doc, setDoc, getDoc
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { collection, query, where, getDocs, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
+import { gateStaffPage } from './role-guard.js';
 
-import { gateStaff } from './role-guard.js';
-await gateStaff(); // redirige a client-dashboard si no es admin/professor
+// Gate unico 
+await gateStaffPage();
 
-/* ====== Helpers de rol ====== */
-async function getUserRoles(uid) {
-  try {
-    const s = await getDoc(doc(db, 'users', uid));
-    return s.exists() ? (s.data().roles || []) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function requireStaff(user) {
-  if (!user) return false;
-
-  // Refresca claims por si se acaban de cambiar
-  try {
-    const tok = await user.getIdTokenResult(true);
-    if (tok?.claims?.admin) return true;
-  } catch {/* ignore */}
-
-  // Roles en Firestore
-  const roles = await getUserRoles(user.uid);
-  return roles.includes('admin') || roles.includes('professor');
-}
-
-/* ====== Boot ====== */
 document.addEventListener('DOMContentLoaded', () => {
-  // Toggle sidebar
   const toggleButton = document.getElementById("toggleNav");
   const sidebar      = document.getElementById("sidebar");
   if (toggleButton && sidebar) {
     toggleButton.addEventListener("click", () => sidebar.classList.toggle("active"));
   }
 
-  // Lucide (opcional)
   if (window.lucide) window.lucide.createIcons();
 
-  // Seguridad: solo admin/profesor (o UID maestro)
-  onAuthStateChanged(auth, async (user) => {
-    const ok = await requireStaff(user);
-    if (!ok) { window.location.href = './index.html'; return; }
-  });
-
-  // Cerrar sesión
   document.getElementById("logoutSidebar")?.addEventListener("click", async (e) => {
     e.preventDefault();
     try {
@@ -64,43 +28,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ──────────────────────────────────────────────
-   * 1) Marcar asistencia por CÓDIGO (4 dígitos)
-   * ────────────────────────────────────────────── */
+  // 1) Marcar asistencia por código
   const form = document.getElementById("attendanceForm");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const codeEl = document.getElementById("codeInput");
     const code = (codeEl?.value || '').trim();
-
-    if (!/^\d{4}$/.test(code)) {
-      showAlert("Ingresa un código válido de 4 dígitos", "error");
-      return;
-    }
+    if (!/^\d{4}$/.test(code)) { showAlert("Ingresa un código válido de 4 dígitos", "error"); return; }
 
     try {
-      // Busca el usuario por attendanceCode
       const usersQ = query(collection(db, "users"), where("attendanceCode", "==", code));
       const snap   = await getDocs(usersQ);
-      if (snap.empty) {
-        showAlert("Código no encontrado", "error");
-        return;
-      }
+      if (snap.empty) { showAlert("Código no encontrado", "error"); return; }
 
       const uid     = snap.docs[0].id;
       const nombre  = snap.docs[0].data().nombre || 'Alumno';
-      const fechaCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" }); // YYYY-MM-DD
+      const fechaCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
 
-      // Registra/actualiza la asistencia del día
       await setDoc(
         doc(db, "asistencias", fechaCR, "usuarios", uid),
         {
           presente: true,
-          hora: new Intl.DateTimeFormat('es-CR', {
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'America/Costa_Rica'
-          }).format(new Date()),
+          hora: new Intl.DateTimeFormat('es-CR', { hour:'2-digit', minute:'2-digit', timeZone:'America/Costa_Rica' }).format(new Date()),
           nombre
         },
         { merge: true }
@@ -114,9 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ──────────────────────────────────────────────
-   * 2) Generar QR del día para clase
-   * ────────────────────────────────────────────── */
+  // 2) Generar QR del día
   const qrCanvas = document.getElementById("qrcode");
   const btnQR    = document.getElementById("btnGenQR");
 
@@ -126,8 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src   = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
-        s.onload = resolve;
-        s.onerror = reject;
+        s.onload = resolve; s.onerror = reject;
         document.head.appendChild(s);
       });
       return !!(window.QRCode && window.QRCode.toCanvas);
@@ -139,21 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnQR?.addEventListener("click", async () => {
     const ok = await ensureQRCodeLib();
-    if (!ok) {
-      showAlert("No se pudo cargar el generador de QR.", "error");
-      return;
-    }
-
+    if (!ok) { showAlert("No se pudo cargar el generador de QR.", "error"); return; }
     const fechaCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
-    const payload = JSON.stringify({ fecha: fechaCR }); // sencillo: fecha del día
+    const payload = JSON.stringify({ fecha: fechaCR });
 
     window.QRCode.toCanvas(qrCanvas, payload, { width: 260 }, (err) => {
-      if (err) {
-        console.error("QR error:", err);
-        showAlert("No se pudo generar el QR", "error");
-      } else {
-        showAlert("QR generado", "success");
-      }
+      if (err) { console.error("QR error:", err); showAlert("No se pudo generar el QR", "error"); }
+      else { showAlert("QR generado", "success"); }
     });
   });
 });

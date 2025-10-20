@@ -1,15 +1,48 @@
 // ./js/admin-metrics.js
 import { auth, db } from './firebase-config.js';
-import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { showAlert } from './showAlert.js';
-import { gateAdmin } from './role-guard.js';
+import { gateAdminPage } from './role-guard.js';
 
-// Gate único. Si no es admin → client-dashboard (evita loops)
-await gateAdmin({ onDeny: 'client-dashboard.html' });
+/* ========= helpers DOM/nav ========= */
+const ready = (fn)=>
+  (document.readyState === 'loading')
+    ? document.addEventListener('DOMContentLoaded', fn, { once:true })
+    : fn();
+
+function ensureNavCSS(){
+  if (document.getElementById('nav-fallback-css')) return;
+  const style = document.createElement('style');
+  style.id = 'nav-fallback-css';
+  style.textContent = `
+    .hamburger-btn{position:fixed;right:16px;top:16px;z-index:10001}
+    .sidebar{position:fixed;inset:0 auto 0 0;width:260px;height:100vh;
+             transform:translateX(-100%);transition:transform .25s ease;z-index:10000}
+    .sidebar.active{transform:translateX(0)}
+  `;
+  document.head.appendChild(style);
+}
+function bindSidebarOnce(){
+  const btn = document.getElementById('toggleNav');
+  const sb  = document.getElementById('sidebar');
+  if (!btn || !sb || btn.dataset.bound) return;
+  btn.addEventListener('click', ()=> sb.classList.toggle('active'));
+  btn.dataset.bound = '1';
+}
+function bindLogoutOnce(){
+  const a = document.getElementById('logoutSidebar');
+  if (!a || a.dataset.bound) return;
+  a.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    try { await signOut(auth); location.href='index.html'; }
+    catch { showAlert('Error al cerrar sesión','error'); }
+  });
+  a.dataset.bound = '1';
+}
 
 const crTZ = 'America/Costa_Rica';
-const todayISO = () => new Date().toLocaleDateString('en-CA', { timeZone: crTZ });
+const todayISO = () => new Date().toLocaleDateString('en-CA',{timeZone:crTZ});
 const monthsES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
 function monthsBetween(d1, d2){
@@ -25,41 +58,36 @@ function parseMaybeDate(v){
   return isNaN(d.getTime()) ? null : d;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const toggleBtn = document.getElementById('toggleNav');
-  const sidebar = document.getElementById('sidebar');
-  toggleBtn?.addEventListener('click', ()=> sidebar?.classList.toggle('active'));
+/* ========= init protegido (no bloqueante) ========= */
+ready(() => {
+  ensureNavCSS();
+  bindSidebarOnce();
+  bindLogoutOnce();
+  if (window.lucide) { try { window.lucide.createIcons(); } catch{} }
 
-  document.getElementById('logoutSidebar')?.addEventListener('click', async (e)=>{
-    e.preventDefault();
-    try { await signOut(auth); location.href='index.html'; } catch {}
-  });
+  // No bloqueamos el shell: si no es admin, role-guard redirige internamente
+  gateAdminPage()
+    .then(initProtected)
+    .catch(()=>{/* role-guard se encarga de redirigir */});
+});
 
+async function initProtected(){
+  // “Última actualización”
   const fmt = new Intl.DateTimeFormat('es-CR', {
     hour:'2-digit', minute:'2-digit', second:'2-digit', timeZone: crTZ
   });
   const last = document.getElementById('lastUpdate');
   if (last) last.textContent = `Actualizado: ${fmt.format(new Date())}`;
-});
 
-onAuthStateChanged(auth, async (user) => {
-  if (!user) { location.href='index.html'; return; }
-  try { await buildMetrics(); }
-  catch (e) {
+  try {
+    await buildMetrics();
+  } catch (e) {
     console.error(e);
     showAlert('No se pudieron cargar las métricas', 'error');
   }
-});
-
-/* ====== Charts cache ====== */
-const charts = { signup: null, gender: null, age: null };
-function destroyIfExists(key) { try { charts[key]?.destroy(); } catch {} charts[key] = null; }
-function lockCanvasHeight(canvas, px){
-  if (!canvas) return;
-  try { canvas.style.setProperty('height', `${px}px`, 'important'); } catch {}
 }
 
-/* ====== Core: buildMetrics ====== */
+/* ========= Core: métricas ========= */
 async function buildMetrics(){
   const usersSnap = await getDocs(collection(db,'users'));
   const users = usersSnap.docs.map(d => ({ id:d.id, ...d.data() }));
@@ -68,19 +96,19 @@ async function buildMetrics(){
   const today = new Date(todayISO());
 
   let activos = 0, inactivos = 0;
-  let nAdmins = 0, nProfes = 0, nStudents = 0;
+  let nAdmins=0, nProfes=0, nStudents=0;
 
-  let sumMonths = 0, contMonths = 0;
+  let sumMonths=0, contMonths=0;
   const year = new Date().getFullYear();
   const altasMes = Array(12).fill(0);
 
   const genderCount = { male:0, female:0, other:0, unknown:0 };
-  const ageBuckets  = { '≤12':0, '13–17':0, '18–24':0, '25–34':0, '35–44':0, '45–54':0, '55–64':0, '65+':0 };
+  const ageBuckets = { '≤12':0, '13–17':0, '18–24':0, '25–34':0, '35–44':0, '45–54':0, '55–64':0, '65+':0 };
   let ageKnown = 0;
 
-  for (const u of users) {
+  users.forEach(u=>{
     const exp = parseMaybeDate(u.expiryDate || u.expira || u.expire || null);
-    if (exp) (exp >= today ? activos++ : inactivos++); else inactivos++;
+    if (exp){ (exp >= today) ? activos++ : inactivos++; } else { inactivos++; }
 
     const roles = Array.isArray(u.roles) ? u.roles : [];
     if (roles.includes('admin')) nAdmins++;
@@ -112,7 +140,7 @@ async function buildMetrics(){
       else if (age <= 64) ageBuckets['55–64']++;
       else ageBuckets['65+']++;
     }
-  }
+  });
 
   qs('#kpiTotal')?.replaceChildren(document.createTextNode(total));
   qs('#kpiActivos')?.replaceChildren(document.createTextNode(activos));
@@ -138,25 +166,24 @@ async function buildMetrics(){
   drawAgeChart(ageBuckets, ageKnown);
 }
 
-/* ====== Charts ====== */
+/* ========= Charts (con destrucción segura) ========= */
+const _charts = {};  // id -> instancia
+
+function destroyChart(id){
+  try { _charts[id]?.destroy?.(); } catch {}
+  _charts[id] = null;
+}
+
 function drawSignupChart(series){
   const canvas = document.getElementById('signupChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  lockCanvasHeight(canvas, 180);
-  destroyIfExists('signup');
-  const ctx = canvas.getContext('2d');
-  charts.signup = new Chart(ctx, {
+  destroyChart('signup');
+  _charts.signup = new Chart(canvas.getContext('2d'), {
     type: 'line',
-    data: {
-      labels: monthsES,
-      datasets: [{ label: 'Altas', data: series, borderWidth: 2, tension: .25, pointRadius: 3 }]
-    },
+    data: { labels: monthsES, datasets: [{ label: 'Altas', data: series, borderWidth: 2, tension: .25 }] },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 16/9,
-      plugins: { legend: { display:false }, tooltip: { mode:'index', intersect:false } },
-      interaction: { mode:'nearest', intersect:false },
+      plugins: { legend: { display:false } },
       scales: { y: { beginAtZero:true, ticks:{ precision:0 } } }
     }
   });
@@ -165,49 +192,28 @@ function drawSignupChart(series){
 function drawGenderChart(counts){
   const canvas = document.getElementById('genderChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  const note = qs('#genderNote');
-  if (note) note.textContent = counts.unknown ? `Sin dato: ${counts.unknown}` : '';
-  lockCanvasHeight(canvas, 180);
-  destroyIfExists('gender');
-  const ctx = canvas.getContext('2d');
-  charts.gender = new Chart(ctx, {
+  destroyChart('gender');
+  const note = qs('#genderNote'); if (note) note.textContent = counts.unknown ? `Sin dato: ${counts.unknown}` : '';
+  _charts.gender = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
-    data: {
-      labels: ['Masculino','Femenino','Otro'],
-      datasets: [{ data: [counts.male, counts.female, counts.other] }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 1.6,
-      cutout: '65%',
-      plugins: { legend: { position:'bottom' } }
-    }
+    data: { labels: ['Masculino','Femenino','Otro'], datasets: [{ data: [counts.male, counts.female, counts.other] }] },
+    options: { cutout: '65%', plugins: { legend: { position:'bottom' } } }
   });
 }
 
 function drawAgeChart(buckets, known){
   const canvas = document.getElementById('ageChart');
   if (!canvas || typeof Chart === 'undefined') return;
+  destroyChart('age');
   const labels = Object.keys(buckets);
   const data = labels.map(k => buckets[k]);
-  const note = qs('#ageNote');
-  if (note) note.textContent = known ? '' : 'Aún no hay fechas de nacimiento registradas.';
-  lockCanvasHeight(canvas, 220);
-  destroyIfExists('age');
-  const ctx = canvas.getContext('2d');
-  charts.age = new Chart(ctx, {
+  const note = qs('#ageNote'); if (note) note.textContent = known ? '' : 'Aún no hay fechas de nacimiento registradas.';
+  _charts.age = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: { labels, datasets:[{ label:'Usuarios', data, borderWidth:1 }]},
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      aspectRatio: 16/9,
-      plugins: { legend: { display:false } },
-      scales: { y: { beginAtZero:true, ticks:{ precision:0 } } }
-    }
+    options: { plugins: { legend: { display:false } }, scales: { y: { beginAtZero:true, ticks:{ precision:0 } } } }
   });
 }
 
-/* ====== utils ====== */
+/* ========= utils ========= */
 function qs(sel){ return document.querySelector(sel); }
