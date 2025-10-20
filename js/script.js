@@ -103,7 +103,6 @@ if (logoutButton) {
 
 
 // ─── TOGGLE DEL SIDEBAR EN REPORTES.HTML ───────────────────────────────────────
-// Si existe el botón hamburguesa con id="toggleNav"
 const toggleNavBtn = document.getElementById('toggleNav');
 if (toggleNavBtn) {
   toggleNavBtn.addEventListener('click', () => {
@@ -117,13 +116,10 @@ if (toggleNavBtn) {
 
 
 // ─── CERRAR SESIÓN DESDE EL SIDEBAR EN REPORTES.HTML ───────────────────────────
-// Si existe el enlace con id="logoutSidebar", cerramos sesión redirigiendo
 const logoutSidebarLink = document.getElementById('logoutSidebar');
 if (logoutSidebarLink) {
   logoutSidebarLink.addEventListener('click', async (e) => {
     e.preventDefault();
-    // Aquí podrás integrar signOut(auth) si estás usando Firebase Auth,
-    // pero en tu script original solo rediriges a index.html:
     showAlert('Sesión cerrada.', 'success');
     setTimeout(() => {
       window.location.href = './index.html';
@@ -131,60 +127,44 @@ if (logoutSidebarLink) {
   });
 }
 
-// ─── Notificación/forzado de nuevo parche de Service Worker ───────────────────
+
+
+// ─── REGISTRO DEL SERVICE WORKER (silencioso y con recarga controlada) ────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
-    const reg = await navigator.serviceWorker.register('./service-worker.js');
+    try {
+      // Importante en GH Pages: versión en query + scope relativo
+      const reg = await navigator.serviceWorker.register('./service-worker.js?v=2025.10.20.v3', { scope: './' });
 
-    function promptUpdate(sw) {
-      // Muestra un prompt simple; si tu UI tiene un toast con botón, puedes cambiarlo
-      if (confirm('Nueva versión disponible. Toca aceptar para actualizar.')) {
-        sw.postMessage({ type: 'SKIP_WAITING' });
-      }
-    }
-
-    // SW nuevo quedó en "waiting"
-    if (reg.waiting) promptUpdate(reg.waiting);
-
-    // Cuando llegue un SW nuevo a "installed"
-    reg.addEventListener('updatefound', () => {
-      const newSW = reg.installing;
-      newSW?.addEventListener('statechange', () => {
-        if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-          promptUpdate(newSW);
-        }
+      // Recarga solo UNA vez cuando cambia el controlador
+      let didReload = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (didReload) return;
+        didReload = true;
+        window.location.reload();
       });
-    });
 
-    // Cuando el SW cambia (después de SKIP_WAITING) recargamos
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.location.reload();
-    });
-
-    // ── NUEVO: chequeos proactivos de actualización ────────────────────────────
-    // 1) Apenas esté listo, fuerza un update
-    navigator.serviceWorker.ready.then((readyReg) => {
-      readyReg.update().catch(() => {});
-    });
-
-    // 2) Chequeo periódico cada 30 minutos
-    setInterval(async () => {
-      const currentReg = await navigator.serviceWorker.getRegistration();
-      await currentReg?.update();
-    }, 30 * 60 * 1000);
-
-    // 3) Al volver a la pestaña visible, vuelve a chequear
-    document.addEventListener('visibilitychange', async () => {
-      if (document.visibilityState === 'visible') {
-        const currentReg = await navigator.serviceWorker.getRegistration();
-        await currentReg?.update();
+      // Si ya hay un SW nuevo en "waiting", actualiza de una
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
-    });
-    // ───────────────────────────────────────────────────────────────────────────
-  });
 
-  // opcional: escuchar mensajes desde el SW
-  navigator.serviceWorker.addEventListener('message', (e) => {
-    // manejar mensajes si los envías desde el SW
+      // Cuando llega un SW nuevo a "installed", actualiza
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        sw?.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            sw.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+
+      // (Opcional) chequeo al estar listo
+      navigator.serviceWorker.ready.then(r => r.update().catch(() => {}));
+      // Si ves algo raro, puedes comentar el setInterval siguiente.
+      // setInterval(async () => (await navigator.serviceWorker.getRegistration())?.update(), 30 * 60 * 1000);
+    } catch (e) {
+        console.error('SW register error', e);
+    }
   });
 }

@@ -23,12 +23,12 @@
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/locales/es.js"></script>
 
   <link rel="icon" href="./assets/favicon-32x32.png" type="image/x-icon">
-  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="manifest" href="./manifest.webmanifest?v=2025.10.20.v1">
   <meta name="theme-color" content="#0d1117">
 
 <!-- iOS -->
 <link rel="apple-touch-icon" href="./assets/android-chrome-512x512.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bocaraca">
 
@@ -87,7 +87,6 @@
     <ul>
       <li><a href="client-dashboard.html"><span>🏠</span>Inicio</a></li>
       <li><a href="profile.html"><span>👤</span>Mi perfil</a></li>
-      <li><a href="events.html"><span>🎫</span>Eventos</a></li>
       <li><a id="logoutSidebar" href="#"><span>🚪</span>Cerrar sesión</a></li>
     </ul>
   </aside>
@@ -212,6 +211,8 @@
   }
 </script>
 <script type="module" src="./js/pwa-install.js"></script>
+
+<script type="module" src="./js/sw-register.js"></script>
 
 </body>
 </html>
