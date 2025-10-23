@@ -129,42 +129,74 @@ if (logoutSidebarLink) {
 
 
 
-// ─── REGISTRO DEL SERVICE WORKER (silencioso y con recarga controlada) ────────
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
-    try {
-      // Importante en GH Pages: versión en query + scope relativo
-      const reg = await navigator.serviceWorker.register('./service-worker.js?v=2025.10.20.v3', { scope: './' });
+// ─── REGISTRO SW (modo 100% manual, sin auto-update ni auto-reload) ───────────
+(function(){
+  if (!('serviceWorker' in navigator)) return;
 
-      // Recarga solo UNA vez cuando cambia el controlador
-      let didReload = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (didReload) return;
-        didReload = true;
-        window.location.reload();
-      });
+  // Debe coincidir con APP_VERSION del SW
+  const SW_URL = './service-worker.js?v=2025.10.20.v7';
+  let reg = null;
 
-      // Si ya hay un SW nuevo en "waiting", actualiza de una
-      if (reg.waiting) {
-        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
-
-      // Cuando llega un SW nuevo a "installed", actualiza
-      reg.addEventListener('updatefound', () => {
-        const sw = reg.installing;
-        sw?.addEventListener('statechange', () => {
-          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-            sw.postMessage({ type: 'SKIP_WAITING' });
-          }
-        });
-      });
-
-      // (Opcional) chequeo al estar listo
-      navigator.serviceWorker.ready.then(r => r.update().catch(() => {}));
-      // Si ves algo raro, puedes comentar el setInterval siguiente.
-      // setInterval(async () => (await navigator.serviceWorker.getRegistration())?.update(), 30 * 60 * 1000);
-    } catch (e) {
-        console.error('SW register error', e);
+  async function ensureReg() {
+    if (reg) return reg;
+    reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      try { reg = await navigator.serviceWorker.register(SW_URL, { scope: './' }); }
+      catch { /* no-op */ }
     }
-  });
-}
+    return reg;
+  }
+
+  // No hacemos updates automáticos ni recargas aquí
+  ensureReg();
+
+  // Exponemos API manual para tus botones de admin
+  window.swUpdate = {
+    // Descarga un SW nuevo si lo hay y te dice si quedó en 'waiting'
+    async check() {
+      const r = await ensureReg();
+      try { await r?.update(); } catch {}
+      return !!r?.waiting;
+    },
+    // Aplica el SW esperando y recarga SOLO UNA VEZ
+    async apply() {
+      const r = await ensureReg();
+      if (r?.waiting) {
+        const once = () => location.reload();
+        navigator.serviceWorker.addEventListener('controllerchange', once, { once:true });
+        r.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    },
+    // Reset nuclear (opcional)
+    async reset() {
+      const r = await ensureReg();
+      r?.active?.postMessage({ type: 'CLEAR_ALL_CACHES' });
+    },
+    // Estado útil para debug
+    async status() {
+      const r = await ensureReg();
+      return { scope: r?.scope, active: !!r?.active, waiting: !!r?.waiting };
+    }
+  };
+})();
+
+// Forzar actualización manual reutilizable en todas las páginas
+window.forceHardReset = async () => {
+  try {
+    // 1) Buscar si hay un SW nuevo esperando
+    const waiting = await window.swUpdate?.check();
+    if (waiting) {
+      // Hay versión nueva -> aplicarla y recargar UNA sola vez
+      window.showAlert?.('Actualizando a la última versión…', 'success');
+      await window.swUpdate.apply();
+      return; // la recarga ocurre tras controllerchange
+    }
+
+    // 2) Si no hay versión nueva, hacemos "hard reset" de cachés y recargamos
+    window.showAlert?.('No hay versión nueva. Limpiando caché…', 'success');
+    await window.swUpdate?.reset();
+  } catch (err) {
+    console.error('forceHardReset()', err);
+    alert('No pude completar la actualización. Intenta recargar la página.');
+  }
+};
