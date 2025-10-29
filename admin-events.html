@@ -28,10 +28,6 @@
     z-index: 1100; 
   }
   
-  .custom-modal.active { 
-    display:block; 
-  }
-
     /* Contenedor principal centrado y de ancho limitado */
     .event-container {
       max-width: 900px;    /* aumentamos de 800 a 900 */
@@ -153,7 +149,7 @@
       <li><a href="./usuarios.html"><i class="bi bi-people-fill"></i> Usuarios</a></li>
       <li><a href="./control-mensualidades.html"><i class="bi bi-cash-coin"></i> Mensualidades</a></li>
       <li><a href="./admin-users.html"><i class="bi bi-person-rolodex"></i></i> Roles</a></li>
-      
+      <li><a href="./marcar-asistencia.html"><i class="bi bi-person-bounding-box"></i> Asistencias</a></li>
       <li><a href="./reportes.html"><i class="bi bi-file-earmark-text-fill"></i> Reportes</a></li>
       <li><a href="./admin-metrics.html"><i class="bi bi-pie-chart-fill"></i></i> Metricas</a></li>
       <li><a href="./admin-events.html"><i class="bi bi-calendar-week"></i>Crear Evento</a></li>
@@ -259,7 +255,12 @@
   <!-- Cropper.js -->
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
 
+  <!-- Firebase + tu lógica -->
+  <script type="module" src="./js/firebase-config.js"></script>
   <script type="module" src="./js/admin-events.js"></script>
+
+  <!-- Toggle del sidebar, logout y lucide-icons -->
+  <script src="./js/script.js"></script>
 
   <script>
     if ('serviceWorker' in navigator) {

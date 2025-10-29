@@ -1,140 +1,166 @@
 // ./js/admin-events.js
 import { auth, db, app } from './firebase-config.js';
-import { signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
-  collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, getDoc, serverTimestamp, orderBy, query
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
-  getStorage, ref as storageRef, uploadBytes, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
-import Cropper from 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.esm.js';
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js"; // *** CROP INICIO ***
+import Cropper from 'https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.esm.js';      // *** CROP INICIO ***
 import { showAlert } from './showAlert.js';
-import { gateAdminPage } from './role-guard.js';
 
-/* ===== helpers DOM/nav (mismo patrón que ya usamos) ===== */
-const ready = (fn)=>
-  (document.readyState === 'loading')
-    ? document.addEventListener('DOMContentLoaded', fn, { once:true })
-    : fn();
+document.addEventListener('DOMContentLoaded', () => {
+  // 1) Sidebar toggle
+  const toggleBtn     = document.getElementById('toggleNav');
+  const sidebar       = document.getElementById('sidebar');
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener('click', () => sidebar.classList.toggle('active'));
+  }
 
-function ensureNavCSS(){
-  if (document.getElementById('nav-fallback-css')) return;
-  const style = document.createElement('style');
-  style.id = 'nav-fallback-css';
-  style.textContent = `
-    .hamburger-btn{position:fixed;right:16px;top:16px;z-index:10001}
-    .sidebar{position:fixed;inset:0 auto 0 0;width:260px;height:100vh;
-             transform:translateX(-100%);transition:transform .25s ease;z-index:10000}
-    .sidebar.active{transform:translateX(0)}
-  `;
-  document.head.appendChild(style);
-}
-function bindSidebarOnce(){
-  const btn = document.getElementById('toggleNav');
-  const sb  = document.getElementById('sidebar');
-  if (!btn || !sb || btn.dataset.bound) return;
-  btn.addEventListener('click', ()=> sb.classList.toggle('active'));
-  btn.dataset.bound = '1';
-}
-function bindLogoutOnce(){
-  const a = document.getElementById('logoutSidebar');
-  if (!a || a.dataset.bound) return;
-  a.addEventListener('click', async (e)=>{
-    e.preventDefault();
-    try { await signOut(auth); showAlert('Has cerrado sesión','success'); setTimeout(()=>location.href='index.html', 900); }
-    catch { showAlert('Error al cerrar sesión','error'); }
+  // 2) Logout desde sidebar
+  const logoutSidebar = document.getElementById('logoutSidebar');
+  if (logoutSidebar) {
+    logoutSidebar.addEventListener('click', async e => {
+      e.preventDefault();
+      try {
+        await signOut(auth);
+        showAlert('Has cerrado sesión', 'success');
+        setTimeout(() => window.location.href = 'index.html', 1500);
+      } catch {
+        showAlert('Error al cerrar sesión', 'error');
+      }
+    });
+  }
+
+  // 3) Seguridad: solo administradores
+  onAuthStateChanged(auth, user => {
+    const ADMINS = [
+      "vVUIH4IYqOOJdQJknGCjYjmKwUI3", // Iván
+      "ScODWX8zq1ZXpzbbKk5vuHwSo7N2"  // Luis
+    ];
+    if (!user || !ADMINS.includes(user.uid)) {
+      window.location.href = './index.html';
+    }
   });
-  a.dataset.bound = '1';
-}
 
-/* ===== init protegido NO bloqueante ===== */
-ready(() => {
-  ensureNavCSS();
-  bindSidebarOnce();
-  bindLogoutOnce();
-  if (window.lucide) { try { window.lucide.createIcons(); } catch {} }
-
-  // Gate sin frenar el shell (si no es admin, role-guard redirige)
-  gateAdminPage()
-    .then(initProtected)
-    .catch(()=>{/* role-guard se encarga de redirigir */});
-});
-
-async function initProtected(){
+  // 4) Capturar DOM del CRUD
   const form      = document.getElementById('eventForm');
   const tblBody   = document.getElementById('eventsTbody');
   const cancelBtn = document.getElementById('cancelBtn');
-  if (!form || !tblBody || !cancelBtn) return;
 
-  /* ====== Cropper/Storage ====== */
+  if (!form || !tblBody || !cancelBtn) {
+    console.error('Faltan elementos clave en el DOM');
+    return;
+  }
+
+  // *** CROP INICIO ***
+  // referencias para cropper
   const imageFileInput = document.getElementById('imageFile');
   const cropperModal   = document.getElementById('cropperModal');
   const cropperImage   = document.getElementById('cropperImage');
   const cropBtn        = document.getElementById('cropBtn');
   const cancelCropBtn  = document.getElementById('cancelCropBtn');
-  let cropper = null, rawFile = null;
-  const storage = getStorage(app);
+  let   cropper        = null;
+  let   rawFile        = null;
+  const storage        = getStorage(app);
 
-  imageFileInput?.addEventListener('change', e => {
-    const f = e.target.files?.[0]; if (!f) return;
-    rawFile = f;
-    cropperImage.src = URL.createObjectURL(f);
+  // al seleccionar archivo, abrimos modal con Cropper
+  imageFileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    rawFile = file;
+    cropperImage.src = URL.createObjectURL(file);
     cropperModal.classList.add('active');
-    cropper?.destroy();
-    cropper = new Cropper(cropperImage, { aspectRatio: 1, viewMode: 1, autoCropArea: 1 });
+    if (cropper) cropper.destroy();
+    cropper = new Cropper(cropperImage, {
+      aspectRatio: 1,
+      viewMode: 1,
+      autoCropArea: 1
+    });
   });
-  cancelCropBtn?.addEventListener('click', () => {
-    cropper?.destroy(); cropper = null; cropperModal.classList.remove('active'); if (imageFileInput) imageFileInput.value = '';
+
+  // cancelar recorte
+  cancelCropBtn.addEventListener('click', () => {
+    cropper.destroy();
+    cropper = null;
+    cropperModal.classList.remove('active');
+    imageFileInput.value = '';
   });
-  cropBtn?.addEventListener('click', () => {
-    if (!cropper || !rawFile) return;
-    const canvas = cropper.getCroppedCanvas({ width: 800, height: 800 });
+
+  // recortar y subir
+  cropBtn.addEventListener('click', () => {
+    if (!cropper) return;
+    const canvas = cropper.getCroppedCanvas({ width: 500, height: 500 });
     canvas.toBlob(async blob => {
       try {
-        const filename = `events/${Date.now()}_${(rawFile.name||'img').replace(/\s+/g,'_')}`;
-        const ref = storageRef(storage, filename);
+        const filename = `events/${Date.now()}_${rawFile.name}`;
+        const ref      = storageRef(storage, filename);
         await uploadBytes(ref, blob);
         const url = await getDownloadURL(ref);
+        // colocamos la URL en el input oculto de imageUrl
         document.getElementById('imageUrl').value = url;
         showAlert('Imagen recortada y subida','success');
       } catch (err) {
-        console.error(err);
+        console.error('Error subiendo imagen:', err);
         showAlert('Error al subir imagen','error');
       } finally {
-        cropper?.destroy(); cropper=null; cropperModal.classList.remove('active');
+        cropper.destroy();
+        cropper = null;
+        cropperModal.classList.remove('active');
       }
-    }, rawFile.type || 'image/jpeg');
+    }, rawFile.type);
   });
+  // *** CROP FIN ***
 
-  /* ====== Quill ====== */
+  // 5) Inicializar Quill para descripción
   const quill = new Quill('#descriptionEditor', {
     theme: 'snow',
-    modules: { toolbar: [['bold','italic','underline','strike'],[{list:'ordered'},{list:'bullet'}],['link','image']] }
+    modules: {
+      toolbar: [
+        ['bold','italic','underline','strike'],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['link','image']
+      ]
+    }
   });
   const hiddenDesc = document.getElementById('description');
 
-  const fields = ['title','imageUrl','from','to','description','ticketsUrl'];
-  let editingId = null;
+  // 6) Formateo de fechas
+  function formatDateStr(dateStr) {
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    const opts = { weekday:'long', day:'numeric', month:'long' };
+    return new Intl.DateTimeFormat('es-CR', opts)
+      .format(dt)
+      .replace(/^\w/, c => c.toUpperCase());
+  }
 
-  /* ====== Crear/Actualizar ====== */
+  let editingId = null;
+  const fields = ['title','imageUrl','from','to','description','ticketsUrl'];
+
+  // 7) Crear / actualizar evento
   form.addEventListener('submit', async e => {
     e.preventDefault();
     hiddenDesc.value = quill.root.innerHTML;
-
     const data = {
-      title: document.getElementById('title').value.trim(),
-      imageUrl: document.getElementById('imageUrl').value.trim(),
-      from: document.getElementById('from').value, // YYYY-MM-DD
-      to: document.getElementById('to').value,
+      title:       document.getElementById('title').value.trim(),
+      imageUrl:    document.getElementById('imageUrl').value.trim(),
+      from:        document.getElementById('from').value,
+      to:          document.getElementById('to').value,
       description: hiddenDesc.value,
-      ticketsUrl: document.getElementById('ticketsUrl').value.trim(),
-      createdAt: serverTimestamp()
+      ticketsUrl:  document.getElementById('ticketsUrl').value.trim(),
+      createdAt:   Date.now()
     };
-
-    if (!data.title || !data.from || !data.to){
-      showAlert('Completa título y fechas','error'); return;
-    }
-
     try {
       if (editingId) {
         await updateDoc(doc(db,'events',editingId), data);
@@ -143,31 +169,38 @@ async function initProtected(){
         await addDoc(collection(db,'events'), data);
         showAlert('Evento creado','success');
       }
-      editingId = null; form.reset(); quill.setContents([]);
-    } catch (err) {
+      editingId = null;
+      form.reset();
+      quill.setContents([]);
+    } catch(err) {
       console.error('Error guardando evento:', err);
-      showAlert('Error guardando evento (revisa reglas de Firestore)','error');
+      showAlert('Error guardando evento','error');
     }
   });
 
+  // 8) Cancelar edición
   cancelBtn.addEventListener('click', () => {
-    editingId = null; form.reset(); quill.setContents([]);
+    editingId = null;
+    form.reset();
+    quill.setContents([]);
   });
 
-  /* ====== Tabla realtime ====== */
-  const q = query(collection(db,'events'), orderBy('from','desc'));
-  onSnapshot(q, snap => {
+  // 9) Listar en tiempo real
+  onSnapshot(collection(db,'events'), snap => {
     tblBody.innerHTML = '';
-    snap.forEach(s => {
-      const e = s.data(), id = s.id;
+    snap.docs.forEach(docSnap => {
+      const e  = docSnap.data();
+      const id = docSnap.id;
+      const fromFmt = formatDateStr(e.from);
+      const toFmt   = formatDateStr(e.to);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${e.title||''}</td>
+        <td>${e.title}</td>
         <td>
           <div class="date-range">
-            <span>${formatDateStr(e.from||'')}</span>
+            <span>${fromFmt}</span>
             <span class="arrow">→</span>
-            <span>${formatDateStr(e.to||'')}</span>
+            <span>${toFmt}</span>
           </div>
         </td>
         <td>
@@ -176,43 +209,50 @@ async function initProtected(){
         </td>`;
       tblBody.appendChild(tr);
     });
-  }, err => {
-    console.error('Snapshot error eventos:', err);
-    showAlert('No se pudieron cargar los eventos','error');
-  });
+  }, err => console.error('Snapshot error eventos:', err));
 
-  // Delegación Edit/Del
+  // 10) Delegar botones Editar/Eliminar
   tblBody.addEventListener('click', async ev => {
-    const btn = ev.target.closest('button'); if (!btn) return;
+    const btn = ev.target.closest('button');
+    if (!btn || !btn.dataset.id) return;
     const { id, action } = btn.dataset;
+
     if (action === 'edit') {
-      const s = await getDoc(doc(db,'events',id));
-      const data = s.data()||{};
+      const snap = await getDoc(doc(db,'events',id));
+      const data = snap.data() || {};
       fields.forEach(f => {
-        if (f==='description') quill.root.innerHTML = data.description || '';
-        else { const el = document.getElementById(f); if (el && data[f]!==undefined) el.value = data[f]; }
+        if (f === 'description') {
+          quill.root.innerHTML = data.description || '';
+        } else {
+          const el = document.getElementById(f);
+          if (el && data[f] !== undefined) el.value = data[f];
+        }
       });
       editingId = id;
-    } else if (action === 'del' && confirm('¿Eliminar este evento?')) {
+    }
+
+    if (action === 'del' && confirm('¿Eliminar este evento?')) {
       try {
         await deleteDoc(doc(db,'events',id));
         showAlert('Evento borrado','success');
-        if (editingId===id){ editingId=null; form.reset(); quill.setContents([]); }
-      } catch (err) {
-        console.error(err);
-        showAlert('Error eliminando evento (revisa reglas de Firestore)','error');
+        if (editingId === id) {
+          editingId = null;
+          form.reset();
+          quill.setContents([]);
+        }
+      } catch(err) {
+        console.error('Error eliminando evento:', err);
+        showAlert('Error eliminando evento','error');
       }
     }
   });
-}
+});
 
-/* ====== util ====== */
-function formatDateStr(dateStr){
-  if (!dateStr) return '—';
-  const [y,m,d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, (m||1)-1, d||1);
-  try {
-    return new Intl.DateTimeFormat('es-CR',{weekday:'long',day:'numeric',month:'long'})
-      .format(dt).replace(/^\w/, c=>c.toUpperCase());
-  } catch { return dateStr; }
-}
+// 11) Fallback global para toggle sidebar
+(function(){
+  const t = document.getElementById('toggleNav');
+  const s = document.getElementById('sidebar');
+  if (t && s) {
+    t.addEventListener('click', () => s.classList.toggle('active'));
+  }
+})();
